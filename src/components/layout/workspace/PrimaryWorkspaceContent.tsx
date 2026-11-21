@@ -33,7 +33,7 @@ interface PrimaryWorkspaceContentProps {
 /**
  * Internal primary layout: optional contextual panel + context handle + center.
  * Two-panel mode shares leftover width equally (1fr / 1fr). Center never goes
- * below 400px; context never goes below 260px.
+ * below 200px; context never goes below 260px.
  */
 export function PrimaryWorkspaceContent({
   mode,
@@ -72,6 +72,7 @@ export function PrimaryWorkspaceContent({
     <div
       ref={primaryContentRef}
       className="primary-workspace-content"
+      data-context-side={mode === 'documents' ? 'right' : 'left'}
       data-two-panel={showContext ? 'true' : 'false'}
       data-context-only={contextOnly ? 'true' : 'false'}
       style={rowStyle}
@@ -91,6 +92,7 @@ export function PrimaryWorkspaceContent({
       )}
       {showContext && (
         <ContextResizeHandle
+          side={mode === 'documents' ? 'right' : 'left'}
           contextRef={contextRef}
           primaryContentRef={primaryContentRef}
           widthPx={contextPanelWidthPx}

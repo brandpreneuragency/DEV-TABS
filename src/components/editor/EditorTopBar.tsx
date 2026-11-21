@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { AssistantToggle, ContextPanelToggle } from '../layout/workspace';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useUIStore } from '../../stores/uiStore';
+import { isTextFileDocument, parseTxt } from '../../services/fileFormat';
 import './editorTopBar.css';
 
 interface EditorTopBarProps {
@@ -180,11 +181,18 @@ export function EditorTopBar({ editor, onSave, fileName, onTitleCommit }: Editor
       return true;
     });
     if (targetFrom === -1) return;
-    editor
-      .chain()
-      .focus()
-      .insertContentAt({ from: targetFrom, to: targetTo }, replaceText)
-      .run();
+    if (isTextFileDocument(doc)) {
+      editor.chain().focus().command(({ tr }) => {
+        tr.insertText(replaceText, targetFrom, targetTo);
+        return true;
+      }).run();
+    } else {
+      editor
+        .chain()
+        .focus()
+        .insertContentAt({ from: targetFrom, to: targetTo }, replaceText)
+        .run();
+    }
     setFindState((s) => ({
       matches: computeMatches(query),
       index: Math.min(s.index, computeMatches(query).length - 1),
@@ -195,9 +203,12 @@ export function EditorTopBar({ editor, onSave, fileName, onTitleCommit }: Editor
     if (!editor || !query) return;
     const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n');
     const regex = new RegExp(escapeRegex(query), 'gi');
-    const replaced = text.replace(regex, replaceText);
+    const sourceFile = isTextFileDocument(editor.state.doc);
+    const replaced = sourceFile ? text.replace(regex, () => replaceText) : text.replace(regex, replaceText);
     if (replaced === text) return;
-    editor.chain().focus().setContent(replaced).run();
+    const language: unknown = editor.state.doc.firstChild?.attrs.language;
+    const content = sourceFile ? parseTxt(replaced, typeof language === 'string' ? language : null) : replaced;
+    editor.chain().focus().setContent(content).run();
     setFindState({ matches: [], index: 0 });
   };
 

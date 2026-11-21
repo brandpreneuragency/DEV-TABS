@@ -1,5 +1,20 @@
 # AGENTS.md — TABS Repository Guide
 
+## Current folder ownership — 9 November 2026
+
+- Primary development stays at `C:/Users/burak/MOTHER/LOCAL-DEV/TABS-local` (the area was
+  renamed from `MOTHER/DEV` on 14 November 2026), with GitHub `brandpreneuragency/DEV-TABS`
+  (renamed from `APPS_TABS`; `origin` was updated on 16 November 2026). Existing local WIP was not committed,
+  reset or merged by the folder-organization task.
+- The abandoned `C:/Users/burak/MOTHER/DEV/TABS-Clients-v2-run` clone was removed
+  without integration. Its older execution-copy notes below are historical.
+- The BROTHER `/home/admin/ATLAS/DEV/TABS` checkout was removed after verifying
+  that its HEAD was recoverable from GitHub main. Its sole working-tree source
+  difference was preserved at
+  `docs/source-preservation/26-11-09-07.36-BROTHER-TABS` without integration.
+- The installed Windows application, local application data, independent
+  `ATLAS_TOOLS/atlas-tasks` runtime and `ATLAS_TASKS` authority were not changed.
+
 ## Task routing and development records
 
 - **Small, certain, low-risk change:** take the shortest safe path: inspect the
@@ -47,10 +62,11 @@ agent. Resolve routine choices within the requested scope; review-only means
 no edits. Preserve unrelated work and application data. Destructive/system-wide
 actions, installations and external sharing require explicit task-specific scope.
 BRAIN is read-only through tools/delegates; VAULT is excluded. Only when work
-involves cross-project outputs, plans, owner context, ATLAS or system operations,
-read `../../AGENTS.md` and relevant destination rules. Local outputs use
-MOTHER/WORKSPACE; durable owner records use ATLAS_MEMORY; working material uses
-ATLAS_ROOT/WORKSPACE/work, not BRAIN (systems/methods/patterns). Self-contained local work needs no VPS connection.
+involves cross-project outputs, plans, owner context, BROTHER (VPS) or system operations,
+read `../../AGENTS.md` and relevant destination rules. Finished standalone outputs go to
+`MOTHER/ARTIFACTS/<topic>`, handoffs to `MOTHER/MEMORY/Journal/handoffs/<topic>`, durable owner
+records to MEMORY and scratch files to the tool's temp directory, never BRAIN. WORKSPACE and PLANS were
+retired on 16 November 2026. Self-contained local work needs no VPS connection.
 
 Do not revive deleted Hermes, VPS, `server/`, `deploy/`, or hosted-web requirements from git history unless the user explicitly asks to restore them.
 
@@ -58,8 +74,8 @@ Do not revive deleted Hermes, VPS, `server/`, `deploy/`, or hosted-web requireme
 
 Location/workflow notes; dated operational observations below are historical:
 
-- Active local checkout: `C:\Users\burak\MOTHER\DEV\TABS-local`, branch `main`.
-- Source remote: `https://github.com/brandpreneuragency/APPS_TABS.git` (`origin`).
+- Active local checkout: `C:\Users\burak\MOTHER\LOCAL-DEV\TABS-local`, branch `main`.
+- Source remote: `https://github.com/brandpreneuragency/DEV-TABS.git` (`origin`; the repository was renamed from `APPS_TABS`).
 - A current VPS source checkout has not been verified. The scoped lookup of
   TABS-named folders under the resolved ATLAS project root found no candidate;
   do not assume a second checkout or a local/VPS source synchronization job.
@@ -150,7 +166,20 @@ Do **not** reintroduce `server/`, `deploy/`, Hermes clients/stores, remote folde
 - Put shared state invariants in Zustand actions. Use narrow selectors in large components.
 - Follow existing Dexie patterns for persisted settings; migrate or delete obsolete keys deliberately (e.g. ignore/delete stale `chatMode`).
 
-Shell workspace modes are local only: Documents, Tasks, CRM (including Forms), Settings, plus Terminal. The AI Assistant sidebar’s `SidebarTab = 'chat'` is the local multi-provider assistant — not a Hermes workspace.
+Shell workspace modes are local only: Documents, Tasks, CRM (including Forms), Settings, plus Terminal. The AI Assistant sidebar’s `SidebarTab = 'chat'` uses the local OpenCode V2 service — not a Hermes workspace.
+
+### OpenCode chat integration
+
+- `src/services/openCode/`, `src/stores/openCodeStore.ts` and `src-tauri/src/open_code/`
+  implement the desktop wrapper. OpenCode owns transcripts; Dexie stores TABS session bindings and admission receipts.
+- The scoped plugin in `opencode-plugin/` calls the native `tab_bridge` and the renderer business executor.
+  Keep captured turn context, permission checks and task-authority receipts intact.
+- Service credentials remain native-memory-only. Never stop the shared OpenCode service on TABS exit.
+- Codex-named business tools, recovery tables and scoped filesystem helpers still have active consumers.
+  Provider Accounts also retains CLI discovery primitives. Do not remove these as obsolete chat code.
+- DB v22 resets enumerated legacy chat data only. Preserve OpenCode admissions, business recovery and unrelated application data.
+- Current implementation and acceptance limits are in `docs/work/opencode-chat-wrapper.md`;
+  `docs/work/opencode-native-contract.md` describes IPC and bridge ownership.
 
 ## Implementation conventions
 
@@ -159,15 +188,25 @@ Shell workspace modes are local only: Documents, Tasks, CRM (including Forms), S
 - Strict TypeScript is enabled. Do not hide errors with `any`, `@ts-expect-error` without cause, or broad casts.
 - Prefer small, explicit types and pure helpers for logic that can be unit tested.
 - Keep feature components in their existing area and shared primitives under `src/components/ui/`.
-- Preserve accessibility: semantic controls, keyboard behavior, visible focus, accurate labels.
+- Preserve accessibility: semantic controls, keyboard behavior, accurate labels and
+  the role-specific focus rules in [UI_RULES.md](UI_RULES.md), including native
+  forced-colors focus. Do not reintroduce ordinary button outlines against that contract.
 - Add or update Vitest tests for non-trivial logic and regressions (`*.test.ts` / `*.test.tsx` under `src/`).
 - When user-facing copy changes, update both `src/i18n/en.ts` and `src/i18n/tr.ts` unless intentionally unlocalized.
 
 ### Styling
 
-- Before UI work, read [the UI contract](src/styles/README.md) and inspect the current
-  owner-edited styles. Use its role-based defaults and exceptions; do not restore
-  older colors, spacing or control sizes from a build or historical snapshot.
+- Before any UI design, new page, redesign, mockup or styling change, read and
+  follow [UI_RULES.md](UI_RULES.md). It is the binding, single design-rule source
+  for every agent working in this repository. Inspect current owner-edited styles,
+  but do not copy conflicting old CSS or historical builds as the design authority.
+- When Burak explicitly asks to change a design rule, update that rule in
+  `UI_RULES.md` in the same task without asking for a second approval solely for
+  that edit. Preserve unrelated rules; update affected examples/notes within scope.
+  A rule-document edit alone does not authorize an app-wide implementation migration.
+- [src/styles/README.md](src/styles/README.md) is the implementation map, not a
+  second rulebook. Keep colors and numeric values in `src/styles/tokens.css` and
+  shared CSS recipes in `src/styles/controls.css`.
 - Reuse tokens from `src/styles/tokens.css` and existing feature classes before adding new values.
 - Keep structural styles in scoped feature CSS; inline styles only for dynamic geometry or CSS variables.
 - Audit `min-width: 0`, `min-height: 0`, overflow ownership, and responsive behavior when changing nested layouts.
@@ -232,7 +271,7 @@ End implementation work with:
 Recorded 28 September 2026, Europe/Istanbul; remote redirects/HEAD equality are
 historical observations, not current online verification.
 
-- Primary source: `C:/Users/burak/MOTHER/DEV/TABS-local`, main tracking
+- Primary source: `C:/Users/burak/MOTHER/LOCAL-DEV/TABS-local`, main tracking
   origin/main. Both local and GitHub main resolved to
   `c4efee27a8a12ee0d3862289fbca44c60b0b2b8d`; existing uncommitted changes
   are separate and were preserved.

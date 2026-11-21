@@ -45,7 +45,7 @@ describe('TaskListItem persistence', () => {
     await useTaskStore.getState().refreshTasksFromDb();
   });
 
-  it('saves completion, restores the previous status through Undo and keeps Done after reloading the cache', async () => {
+  it('saves completion, restores the previous status and keeps the archive action after reloading the cache', async () => {
     const user = userEvent.setup();
     const view = render(<TaskCard />);
     await user.click(screen.getByRole('button', { name: en.tasks.completeTask }));
@@ -66,7 +66,7 @@ describe('TaskListItem persistence', () => {
     });
     const reloaded = render(<TaskCard />);
     expect(reloaded.container.querySelector('.task-card')).toHaveClass('task-card--completed');
-    expect(screen.getByRole('button', { name: en.tasks.reopenTask })).toHaveTextContent('Done');
+    expect(screen.getByRole('button', { name: en.tasks.reopenTask }).querySelector('svg.lucide-archive')).toBeInTheDocument();
     expect(reloaded.container.querySelector('.task-card--celebrating')).toBeNull();
   });
 

@@ -1,16 +1,18 @@
 .task-calendar.task-projects-calendar {
   height: 100%;
   overflow: hidden;
-  gap: var(--c-space-2);
-  padding-bottom: var(--c-space-2);
+  gap: var(--c-space-0);
+  padding-bottom: var(--c-space-1);
 }
 
 .task-projects-calendar .task-calendar-board {
-  padding-bottom: 10px;
+  padding-bottom: 0px;
+  padding-left: 0;
 }
 
 .task-projects-calendar .task-projects-toolbar {
   grid-template-columns: minmax(0, 1fr);
+  margin: 0;
 }
 
 .task-kanban-client-actions {
@@ -39,13 +41,18 @@
   min-width: 0;
 }
 :root .task-kanban-client-actions .ui-button {
-  background: transparent;
-  color: var(--c-text-3);
-}
-:root .task-kanban-client-actions .ui-button:not(:disabled):hover {
+  padding-left: var(--c-gap-1);
   background: transparent;
   color: var(--c-text-2);
 }
+:root .task-kanban-client-actions .ui-button:not(:disabled):hover {
+  background: transparent;
+  color: var(--c-text-1);
+}
+:root .task-projects-calendar .crm-kanban-column-header :is(.task-projects-column-label, .task-projects-column-label > *, .ui-icon-button) { color: var(--c-text-2); }
+:root .task-projects-calendar .crm-kanban-column-header .task-projects-column-label:hover,
+:root .task-projects-calendar .crm-kanban-column-header .task-projects-column-label:hover > *,
+:root .task-projects-calendar .crm-kanban-column-header .ui-icon-button:not(:disabled):hover { color: var(--c-text-1); }
 .task-projects-column-label > * {
   max-width: 100%;
 }
@@ -94,11 +101,14 @@
   padding: var(--c-space-2);
   padding-bottom: 14px;
 }
-.crm-kanban-card.task-kanban-card.crm-kanban-card--active {
-  background: var(--c-background-2a);
-}
 .crm-kanban-card.task-kanban-card:hover {
-  background: color-mix(in srgb, var(--c-background-2a) 85%, var(--c-text-1) 8%);
+  background: var(--c-background-1a);
+}
+:root .task-calendar.task-projects-calendar .crm-kanban-card.task-kanban-card,
+:root .task-calendar.task-projects-calendar .crm-kanban-card.task-kanban-card:hover {
+  gap: var(--c-gap-1);
+  background-color: var(--c-background-2);
+  border: var(--border-width) solid var(--c-border-1);
 }
 
 .task-kanban-card-top {
@@ -137,8 +147,9 @@
 }
 
 .task-kanban-card-menu .task-kanban-card-menu-delete:hover {
-  color: var(--c-danger);
+  color: var(--c-danger-2);
 }
+.task-kanban-card-menu .task-kanban-card-menu-delete { color: var(--c-danger); }
 
 .task-kanban-card .crm-kanban-card-title {
   padding: 0;

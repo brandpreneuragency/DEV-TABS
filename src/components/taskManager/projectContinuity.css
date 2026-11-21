@@ -1,0 +1,27 @@
+.project-continuity {
+  min-width: 0;
+  padding: var(--c-space-1);
+  color: var(--c-text-3);
+  font-size: var(--fs-sm);
+}
+.project-continuity summary { cursor: pointer; }
+.project-continuity summary:hover { color: var(--c-text-1); }
+.project-continuity-body,
+.project-continuity-reference {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--c-space-0);
+  overflow-wrap: anywhere;
+}
+.project-continuity-body { padding-top: var(--c-space-1); }
+.project-continuity-body p { margin: 0; }
+.project-continuity-reference { padding-block: var(--c-space-0); }
+.project-continuity-actions { display: flex; flex-wrap: wrap; gap: var(--c-gap-1); }
+.project-continuity-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--c-text-1);
+  font-size: var(--fs-sm);
+  margin: 0;
+}

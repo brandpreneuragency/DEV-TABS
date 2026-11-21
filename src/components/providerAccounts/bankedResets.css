@@ -1,0 +1,44 @@
+.provider-banked { display: flex; flex-direction: column; gap: var(--c-gap-0); min-width: 0; color: var(--c-text-3); font-size: var(--fs-xs); }
+.provider-banked-summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--c-space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.provider-banked-count { flex: none; font-variant-numeric: tabular-nums; }
+.provider-banked-observed { align-self: flex-end; overflow-wrap: anywhere; }
+.provider-banked p { margin: 0; overflow-wrap: anywhere; }
+.provider-banked time { font-variant-numeric: tabular-nums; }
+
+.provider-banked-credits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--c-gap-0) var(--c-space-1);
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  list-style: none;
+}
+.provider-banked-credit {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--c-gap-1);
+  min-width: 0;
+}
+.provider-banked-credit-warning {
+  flex: none;
+  width: var(--c-icon-1);
+  height: var(--c-icon-1);
+  stroke-width: var(--icon-stroke);
+  color: var(--c-warning);
+}
+.provider-banked-credit-details {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

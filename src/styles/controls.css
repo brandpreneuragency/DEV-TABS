@@ -39,7 +39,7 @@
 }
 :root .ui-button:not(:disabled):hover {
   color: var(--c-text-1);
-  background: var(--c-background-4);
+  background: transparent;
 }
 :root .ui-button--compact {
   height: var(--c-sq-button);

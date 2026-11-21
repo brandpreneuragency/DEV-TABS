@@ -12,6 +12,12 @@ import { BrowserFolderConnector } from './browser-folder-connector';
 
 let _connector: FolderConnector | null = null;
 
+/** Injected only by the separate OpenCode acceptance executable. */
+export function isOpenCodeAcceptanceRuntime(): boolean {
+  return isTauriRuntime() && '__TABS_OPENCODE_ACCEPTANCE__' in window
+    && window.__TABS_OPENCODE_ACCEPTANCE__ === true;
+}
+
 export function tasksAcceptanceFixture(): string | null {
   if (!isTauriRuntime() || !('__TABS_TASKS_ACCEPTANCE__' in window)) return null;
   const value = window.__TABS_TASKS_ACCEPTANCE__;

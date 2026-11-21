@@ -34,10 +34,13 @@
   border-radius: var(--neon-radius-card);
 
 }
-:root[data-theme='purple-neon'] .crm-kanban-card.task-kanban-card:hover,
-:root[data-theme='purple-neon'] .crm-kanban-card.task-kanban-card.crm-kanban-card--active {
+:root[data-theme='purple-neon'] .crm-kanban-card.task-kanban-card:hover {
   background: var(--neon-card-hover);
 
+}
+:root[data-theme='purple-neon'] .crm-kanban-card.task-kanban-card.crm-kanban-card--active {
+  background-color: var(--c-background-2);
+  border: var(--border-width) solid var(--c-border-1);
 }
 
 :root[data-theme='purple-neon'] .task-kanban-card-picker,

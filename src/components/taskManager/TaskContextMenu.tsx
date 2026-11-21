@@ -1,10 +1,12 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Trash2, Folder, Calendar } from 'lucide-react';
 import { useTaskStore } from '../../stores/taskStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { projectsForClient } from '../../stores/taskSelection';
 import { findProjectByNameInClient } from '../../stores/taskTreeNames';
 import { TaskDueDateCalendar } from './TaskCalendarDatePicker';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface TaskContextMenuProps {
   taskId: string;
@@ -16,12 +18,14 @@ interface TaskContextMenuProps {
 type Panel = 'main' | 'project' | 'date';
 
 export function TaskContextMenu({ taskId, x, y, onClose }: TaskContextMenuProps) {
+  const { t } = useTranslation();
   const { tasks, updateTask, deleteTask } = useTaskStore();
   const { projects, createProject } = useProjectStore();
   const task = tasks.find((t) => t.id === taskId);
 
   const [panel, setPanel] = useState<Panel>('main');
   const [newProjectName, setNewProjectName] = useState('');
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -118,7 +122,7 @@ export function TaskContextMenu({ taskId, x, y, onClose }: TaskContextMenuProps)
     >
       {panel === 'main' && (
         <>
-          <button type="button" className="ui-list-row drop-item" onClick={removeTask} style={itemStyle}>
+          <button type="button" className="ui-list-row drop-item" onClick={() => setConfirmRemove(true)} style={itemStyle}>
             <Trash2 /> Remove Task
           </button>
           <button type="button" className="ui-list-row drop-item" onClick={() => setPanel('project')} style={itemStyle}>
@@ -159,8 +163,8 @@ export function TaskContextMenu({ taskId, x, y, onClose }: TaskContextMenuProps)
             />
           </div>
           <div style={{ display: 'flex', gap: 4, padding: '4px 12px 6px' }}>
-            <button type="button" className="ui-list-row drop-item" onClick={addNewProject} disabled={!newProjectName.trim()} style={{ ...itemStyle, flex: 1, justifyContent: 'center', opacity: newProjectName.trim() ? 1 : 0.4 }}>
-              Create &amp; Assign
+            <button type="button" className="ui-list-row drop-item" onClick={addNewProject} disabled={!newProjectName.trim()} style={{ ...itemStyle, flex: 1, justifyContent: 'center', opacity: newProjectName.trim() ? 1 : 0.4, backgroundColor: 'var(--c-background-1)' }}>
+              Create
             </button>
             <button type="button" className="ui-list-row drop-item" onClick={() => setPanel('main')} style={{ ...itemStyle, flex: 1, justifyContent: 'center' }}>
               Back
@@ -183,6 +187,12 @@ export function TaskContextMenu({ taskId, x, y, onClose }: TaskContextMenuProps)
           </div>
         </>
       )}
+      {confirmRemove && <ConfirmDialog
+        message={t('tasks.removeTaskConfirm', { title: task.title })}
+        confirmLabel={t('explorer.delete')}
+        onConfirm={removeTask}
+        onCancel={() => setConfirmRemove(false)}
+      />}
     </div>
   );
 }

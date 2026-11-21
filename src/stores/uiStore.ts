@@ -63,11 +63,11 @@ export type FormsPage = 'dashboard' | 'list' | 'builder' | 'submissions' | 'temp
 export type TaskPage = 'list' | 'calendar' | 'projects';
 
 /** Sub-tabs rendered inside the Settings document. Fixed and non-closable. */
-export type SettingsSubTab = 'tools' | 'actions' | 'appearance' | 'agents';
+export type SettingsSubTab = 'tools' | 'actions' | 'appearance';
 /** Legacy Settings sub-tab id kept for deep-link compatibility (maps to `tools`). */
-export type LegacySettingsSubTab = SettingsSubTab | 'models';
+export type LegacySettingsSubTab = SettingsSubTab | 'models' | 'agents';
 /** Which doc-mode tab is active: a normal document or the special Settings doc. */
-export type DocActiveView = 'document' | 'settings' | 'notes' | 'providerAccounts';
+export type DocActiveView = 'document' | 'settings' | 'notes' | 'memory' | 'providerAccounts' | 'scripts';
 
 interface UIStore {
   theme: AppTheme;
@@ -115,7 +115,6 @@ interface UIStore {
   language: 'en' | 'tr';
 
   taskMode: boolean;
-  githubMode: boolean;
   activeTaskId: string | null;
 
   /** CRM module active — mutually exclusive with task mode. Hosts the merged Forms sub-module via `activeCRMPage === 'forms'`. */
@@ -184,7 +183,6 @@ interface UIStore {
   setExpandedPaths: (paths: string[]) => void;
   setSelectedTreePath: (path: string | null) => void;
   setTaskMode: (v: boolean) => void;
-  setGithubMode: (v: boolean) => void;
   setCrmMode: (v: boolean) => void;
   setActiveCRMPage: (p: CRMPage) => void;
   setActiveFormsPage: (p: FormsPage) => void;
@@ -244,7 +242,7 @@ export function selectCanSwapWrappers(
 }
 
 export function selectActiveWorkspaceMode(
-  state: Pick<UIStore, 'taskMode' | 'githubMode' | 'crmMode' | 'activeCRMPage' | 'activeView'>,
+  state: Pick<UIStore, 'taskMode' | 'crmMode' | 'activeCRMPage' | 'activeView'>,
 ): WorkspaceMode {
   return selectActiveWorkspaceModeImpl(state);
 }
@@ -266,7 +264,6 @@ export function selectIsContextPanelOpen(
     UIStore,
     | 'contextPanelOpenByMode'
     | 'taskMode'
-    | 'githubMode'
     | 'crmMode'
     | 'activeCRMPage'
     | 'activeView'
@@ -278,7 +275,7 @@ export function selectIsContextPanelOpen(
 export function selectIsContextPanelAvailable(
   state: Pick<
     UIStore,
-    'taskMode' | 'githubMode' | 'crmMode' | 'activeCRMPage' | 'activeView' | 'activeTaskPage'
+    'taskMode' | 'crmMode' | 'activeCRMPage' | 'activeView' | 'activeTaskPage'
   >,
 ): boolean {
   return selectIsContextPanelAvailableImpl(state);
@@ -334,7 +331,6 @@ export const useUIStore = create<UIStore>((set, get) => ({
   editorFontSize: DEFAULT_EDITOR_FONT_SIZE,
   language: 'en',
   taskMode: false,
-  githubMode: false,
   activeTaskId: null,
   crmMode: false,
   activeCRMPage: 'clients',
@@ -498,7 +494,6 @@ export const useUIStore = create<UIStore>((set, get) => ({
     // Mode entry ensures primary is open (PRD 6.6).
     set({
       taskMode: v,
-      githubMode: false,
       crmMode: false,
       activeView: 'document',
       primaryWrapperOpen: true,
@@ -506,31 +501,11 @@ export const useUIStore = create<UIStore>((set, get) => ({
     persistLayoutKeys({ primaryWrapperOpen: true });
     void db.settings.put({ key: 'taskMode', value: v });
     void db.settings.put({ key: 'crmMode', value: false });
-    void db.settings.put({ key: 'githubMode', value: false });
-  },
-
-  setGithubMode: (v) => {
-    if (v) {
-      set({
-        githubMode: true,
-        taskMode: false,
-        crmMode: false,
-        activeView: 'document',
-        primaryWrapperOpen: true,
-      });
-      persistLayoutKeys({ primaryWrapperOpen: true });
-      void db.settings.put({ key: 'taskMode', value: false });
-      void db.settings.put({ key: 'crmMode', value: false });
-    } else {
-      set({ githubMode: false });
-    }
-    void db.settings.put({ key: 'githubMode', value: v });
   },
 
   setCrmMode: (v) => {
     set({
       crmMode: v,
-      githubMode: false,
       taskMode: false,
       activeView: 'document',
       primaryWrapperOpen: true,
@@ -538,7 +513,6 @@ export const useUIStore = create<UIStore>((set, get) => ({
     persistLayoutKeys({ primaryWrapperOpen: true });
     void db.settings.put({ key: 'crmMode', value: v });
     void db.settings.put({ key: 'taskMode', value: false });
-    void db.settings.put({ key: 'githubMode', value: false });
   },
 
   setActiveCRMPage: (p) => {
@@ -571,38 +545,35 @@ export const useUIStore = create<UIStore>((set, get) => ({
 
   setActiveView: (v) => {
     // Entering documents or settings in doc mode ensures primary open.
-    set({ activeView: v, githubMode: false, primaryWrapperOpen: true,
-      ...(v === 'notes' || v === 'providerAccounts' ? { taskMode: false, crmMode: false } : {}),
+    set({ activeView: v, primaryWrapperOpen: true,
+      ...(v === 'notes' || v === 'memory' || v === 'providerAccounts' || v === 'scripts' ? { taskMode: false, crmMode: false } : {}),
     });
     persistLayoutKeys({ primaryWrapperOpen: true });
-    void db.settings.put({ key: 'githubMode', value: false });
-    if (v === 'notes' || v === 'providerAccounts') {
+    if (v === 'notes' || v === 'memory' || v === 'providerAccounts' || v === 'scripts') {
       void db.settings.put({ key: 'taskMode', value: false });
       void db.settings.put({ key: 'crmMode', value: false });
     }
   },
 
   setActiveSettingsSubTab: (tab) =>
-    set({ activeSettingsSubTab: tab === 'models' ? 'tools' : tab }),
+    set({ activeSettingsSubTab: tab === 'models' || tab === 'agents' ? 'tools' : tab }),
 
   openSettings: (subTab) => {
     // Settings is a first-class shell mode (PRD 6.9). Deep links from Tasks/CRM
     // AI (models/agents/actions) must leave those modes or Settings never renders.
     // Legacy `models` sub-tab is mapped to merged `tools` (LLM + search tools).
     const resolved =
-      subTab === 'models' ? 'tools' : (subTab ?? undefined);
+      subTab === 'models' || subTab === 'agents' ? 'tools' : (subTab ?? undefined);
     set((s) => ({
       activeView: 'settings',
       activeSettingsSubTab: resolved ?? s.activeSettingsSubTab,
       primaryWrapperOpen: true,
       taskMode: false,
       crmMode: false,
-      githubMode: false,
     }));
     persistLayoutKeys({ primaryWrapperOpen: true });
     void db.settings.put({ key: 'taskMode', value: false });
     void db.settings.put({ key: 'crmMode', value: false });
-    void db.settings.put({ key: 'githubMode', value: false });
   },
 
   setActiveTaskId: (id) => {
@@ -680,7 +651,6 @@ export const useUIStore = create<UIStore>((set, get) => ({
       terminalPanelOpen,
       terminalPanelHeight,
       crmModeSetting,
-      githubModeSetting,
       formsModeSetting,
       activeCRMPageSetting,
       activeFormsPageSetting,
@@ -712,7 +682,6 @@ export const useUIStore = create<UIStore>((set, get) => ({
       db.settings.get('terminalPanelOpen'),
       db.settings.get('terminalPanelHeight'),
       db.settings.get('crmMode'),
-      db.settings.get('githubMode'),
       db.settings.get('formsMode'),
       db.settings.get('activeCRMPage'),
       db.settings.get('activeFormsPage'),
@@ -738,15 +707,15 @@ export const useUIStore = create<UIStore>((set, get) => ({
     }
     applyTheme(theme);
 
-    const githubModeValue = githubModeSetting ? Boolean(githubModeSetting.value) : false;
     const crmModeStored = crmModeSetting ? Boolean(crmModeSetting.value) : false;
     const formsModeStored = formsModeSetting ? Boolean(formsModeSetting.value) : false;
     // Forms module was merged into CRM. Migrate a persisted standalone formsMode
     // into CRM mode (activeCRMPage falls back to 'forms' below when migrated).
-    const crmMode = !githubModeValue && (crmModeStored || formsModeStored);
-    const taskModeValue = !githubModeValue && !crmMode && (taskMode ? Boolean(taskMode.value) : false);
+    const crmMode = crmModeStored || formsModeStored;
+    const taskModeValue = !crmMode && (taskMode ? Boolean(taskMode.value) : false);
     // Drop obsolete workspace-mode key from older installs (ignored if absent).
     void db.settings.delete('chatMode');
+    await db.settings.delete('githubMode');
 
     const CRM_PAGES: CRMPage[] = ['clients', 'projects', 'dashboard', 'leads', 'contacts', 'companies', 'pipeline', 'activities', 'forms', 'settings'];
     const FORMS_PAGES: FormsPage[] = ['dashboard', 'list', 'builder', 'submissions', 'templates', 'settings'];
@@ -813,7 +782,6 @@ export const useUIStore = create<UIStore>((set, get) => ({
       editorFontSize: parseEditorFontSize(editorFontSize?.value),
       language: lang,
       taskMode: restoreProjects ? false : taskModeValue,
-      githubMode: githubModeValue,
       activeTaskId: lastActiveTaskId ? String(lastActiveTaskId.value) : null,
       contextWindowOpen: false,
       contextWindowCollapsed: contextWindowCollapsed ? Boolean(contextWindowCollapsed.value) : true,

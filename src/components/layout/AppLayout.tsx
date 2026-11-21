@@ -14,8 +14,10 @@ import { RightPanelSubheader } from '../sidebar/RightPanelSubheader';
 import { TerminalPanel } from '../terminal/TerminalPanel';
 import { SettingsDocument } from '../settings/SettingsDocument';
 import { NotesPage } from '../notes/NotesPage';
+import { MemoryWorkspace } from '../memoryNotes/MemoryWorkspace';
+import { MemoryAssistantSubheader } from '../memoryNotes/MemoryAssistant';
 import { ProviderAccountsPage } from '../providerAccounts/ProviderAccountsPage';
-import { GithubAssistantNotice, GithubAssistantSidebar, GithubWorkspace } from '../github/GithubWorkspace';
+import { ScriptsPage } from '../scripts/ScriptsPage';
 import { useTaskStore } from '../../stores/taskStore';
 import { resolveTaskAssistantBinding } from '../../stores/taskAssistantBinding';
 import {
@@ -46,7 +48,6 @@ export function AppLayout({
   const editorFontSize = useUIStore((s) => s.editorFontSize);
   const navigationWidth = useUIStore((s) => s.navigationWidth);
   const navigationCollapsed = useUIStore((s) => s.navigationCollapsed);
-  const [githubNavigationContainer, setGithubNavigationContainer] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (editorFontSize === 14) {
@@ -61,7 +62,7 @@ export function AppLayout({
   return (
     <div className="workspace" data-navigation-collapsed={navigationCollapsed} style={{ '--sidebar-width': `${navigationCollapsed ? 0 : navigationWidth}px` } as CSSProperties}>
       <div className="sidebar-panel" aria-hidden={navigationCollapsed} inert={navigationCollapsed}>
-        <LeftNarrowSidebar githubNavigationRef={setGithubNavigationContainer} />
+        <LeftNarrowSidebar />
         <NavigationResizeHandle />
       </div>
       <div id="workspace-panels" className="workspace-panels">
@@ -72,7 +73,6 @@ export function AppLayout({
             leftPanel={leftPanel}
             taskListPanel={taskListPanel}
             subtasksBar={subtasksBar}
-            githubNavigationContainer={githubNavigationContainer}
           />
         </div>
         {modals}
@@ -89,14 +89,12 @@ function UniversalWorkspaceShell({
   leftPanel,
   taskListPanel,
   subtasksBar,
-  githubNavigationContainer,
 }: {
   editor: ReactNode;
   sidebar: ReactNode;
   leftPanel: ReactNode;
   taskListPanel: ReactNode;
   subtasksBar?: ReactNode;
-  githubNavigationContainer: HTMLDivElement | null;
 }) {
   const primaryWrapperOpen = useUIStore((s) => s.primaryWrapperOpen);
   const assistantWrapperOpen = useUIStore((s) => s.assistantWrapperOpen);
@@ -115,6 +113,10 @@ function UniversalWorkspaceShell({
   const selectedClientId = useTaskStore((s) => s.selectedClientId);
   const selectedProjectId = useTaskStore((s) => s.selectedProjectId);
   const mode = useUIStore(selectActiveWorkspaceMode);
+  const taskBoardPage = mode === 'tasks' && (activeTaskPage === 'calendar' || activeTaskPage === 'projects');
+  // Calendar resizing must not overwrite the shared, bounded list/tree width.
+  const [calendarWidthPx, setCalendarWidthPx] = useState(() => window.innerWidth / 2);
+  const [projectsWidthPx, setProjectsWidthPx] = useState(() => window.innerWidth / 2);
   const taskBinding = resolveTaskAssistantBinding({
     taskMode,
     crmMode,
@@ -129,7 +131,6 @@ function UniversalWorkspaceShell({
 
   const layout = resolveModeLayout({
     mode,
-    githubNavigationContainer,
     editor,
     leftPanel,
     taskListPanel,
@@ -138,23 +139,20 @@ function UniversalWorkspaceShell({
     contextPanelWidth,
     activeTaskPage,
     activeCRMPage,
+    boardWidthPx: activeTaskPage === 'projects' ? projectsWidthPx : calendarWidthPx,
+    setBoardWidthPx: activeTaskPage === 'projects' ? setProjectsWidthPx : setCalendarWidthPx,
   });
 
-  const assistantBody = mode === 'github' ? (
-    <>
-      <div id="right-panel-subheader-wrapper" className="right-panel-subheader-wrapper">
-        <GithubAssistantNotice />
-      </div>
-      <GithubAssistantSidebar />
-    </>
-  ) : fileViewerOpen ? (
+  const assistantBody = fileViewerOpen ? (
     <div className="assistant-file-viewer-wrapper">
       <FileViewerPanel />
     </div>
   ) : (
     <>
       <div id="right-panel-subheader-wrapper" className="right-panel-subheader-wrapper">
-        {mode === 'notes' || mode === 'providerAccounts' ? (
+        {mode === 'memory' ? (
+          <MemoryAssistantSubheader />
+        ) : mode === 'notes' || mode === 'providerAccounts' || mode === 'scripts' ? (
           <RightPanelSubheader mode="writer" workspaceId={null} taskId={null} />
         ) : mode === 'settings' ? (
           <RightPanelSubheader
@@ -179,13 +177,16 @@ function UniversalWorkspaceShell({
 
   return (
     <WorkspaceShell
-      primaryWrapperOpen={primaryWrapperOpen}
-      assistantWrapperOpen={assistantWrapperOpen}
+      primaryWrapperOpen={taskBoardPage || primaryWrapperOpen}
+      assistantWrapperOpen={!taskBoardPage && assistantWrapperOpen}
       wrappersSwapped={wrappersSwapped}
       assistantWrapperWidthVw={assistantWrapperWidth}
-      assistantContentId={mode !== 'github' && fileViewerOpen ? 'file-viewer-panel' : 'ai-sidebar-panel'}
-      contextPanelVisible={contextPanelVisible}
-      primary={layout.primary}
+      assistantContentId={fileViewerOpen ? 'file-viewer-panel' : 'ai-sidebar-panel'}
+      contextPanelVisible={taskBoardPage || contextPanelVisible}
+      primary={<>
+        <ScriptsPage active={mode === 'scripts'} />
+        {layout.primary}
+      </>}
       // Always pass body so CSS-hidden assistant keeps chat/file-viewer mounted.
       assistant={assistantBody}
     />
@@ -194,7 +195,6 @@ function UniversalWorkspaceShell({
 
 function resolveModeLayout(args: {
   mode: WorkspaceMode;
-  githubNavigationContainer: HTMLDivElement | null;
   editor: ReactNode;
   leftPanel: ReactNode;
   taskListPanel: ReactNode;
@@ -205,13 +205,16 @@ function resolveModeLayout(args: {
     crm: boolean;
     forms: boolean;
     settings: boolean;
-    github: boolean;
     notes: boolean;
+    memory: boolean;
     providerAccounts: boolean;
+    scripts: boolean;
   };
   contextPanelWidth: number;
   activeTaskPage: string;
   activeCRMPage: string;
+  boardWidthPx: number;
+  setBoardWidthPx: (width: number) => void;
 }): { primary: ReactNode } {
   const {
     mode,
@@ -219,24 +222,28 @@ function resolveModeLayout(args: {
     leftPanel,
     taskListPanel,
     subtasksBar,
-    githubNavigationContainer,
     contextPanelOpenByMode,
     contextPanelWidth,
     activeTaskPage,
     activeCRMPage,
+    boardWidthPx,
+    setBoardWidthPx,
   } = args;
 
   // Settings: section components own PrimaryWorkspaceContent via SettingsPanels.
+  // Scripts stays mounted at the shell to retain unsaved drafts across navigation.
+  if (mode === 'scripts') return { primary: null };
+
   if (mode === 'settings') {
     return { primary: <SettingsDocument /> };
   }
 
-  if (mode === 'github') {
-    return { primary: <GithubWorkspace navigationContainer={githubNavigationContainer} /> };
-  }
-
   if (mode === 'notes') {
     return { primary: <NotesPage /> };
+  }
+
+  if (mode === 'memory') {
+    return { primary: <MemoryWorkspace /> };
   }
 
   if (mode === 'providerAccounts') {
@@ -261,19 +268,21 @@ function resolveModeLayout(args: {
   }
 
   if (mode === 'tasks') {
-    const projectsOnly = activeTaskPage === 'projects';
-    const showSubtasks = !projectsOnly && activeTaskPage !== 'calendar' && Boolean(subtasksBar);
-    const contextAvailable = !projectsOnly;
+    const boardPage = activeTaskPage === 'calendar' || activeTaskPage === 'projects';
+    const showSubtasks = Boolean(subtasksBar);
     return {
       primary: (
         <PrimaryWorkspaceContent
           mode="tasks"
           contextPanel={taskListPanel}
           centerPanel={editor}
-          contextOnly={activeTaskPage === 'calendar'}
-          contextPanelAvailable={contextAvailable}
-          contextPanelOpen={contextPanelOpenByMode.tasks}
+          contextPanelAvailable
+          contextPanelOpen={boardPage || contextPanelOpenByMode.tasks}
           contextPanelWidthVw={contextPanelWidth}
+          contextPanelWidthPx={boardPage ? boardWidthPx : undefined}
+          // The resize hook and grid cap this at available space minus the detail minimum.
+          contextPanelMaxWidthPx={boardPage ? Number.MAX_SAFE_INTEGER : undefined}
+          onContextPanelWidthChange={boardPage ? setBoardWidthPx : undefined}
           contextPanelId="task-list-column"
           contextPanelStyle={{
             paddingTop: 0,

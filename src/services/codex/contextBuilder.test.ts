@@ -5,14 +5,10 @@ import { bytesToDataUrl } from '../../utils/fileData';
 
 const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRRkAAAAASUVORK5CYII=';
 
-it('uses a CLI fallback without starting the Codex workspace helper', async () => {
-  let codexCalled = false;
-  const result = await resolveScopeWorkspaceRoot(undefined, 'C:/tabs-cli-workspace', async () => {
-    codexCalled = true;
-    return 'C:/tabs-codex-workspace';
-  });
-  expect(result).toBe('C:/tabs-cli-workspace');
-  expect(codexCalled).toBe(false);
+it('uses the captured folder or explicit service workspace without a retired engine fallback', async () => {
+  expect(await resolveScopeWorkspaceRoot('C:/documents', 'C:/tabs-opencode-workspace')).toBe('C:/documents');
+  expect(await resolveScopeWorkspaceRoot(undefined, 'C:/tabs-opencode-workspace')).toBe('C:/tabs-opencode-workspace');
+  await expect(resolveScopeWorkspaceRoot(undefined, undefined)).rejects.toThrow('Connect OpenCode');
 });
 
 it('keeps a supported image in native input context and rejects unsupported formats', async () => {

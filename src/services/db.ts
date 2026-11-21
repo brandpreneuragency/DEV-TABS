@@ -4,8 +4,7 @@ import type { ClientAttachment, ClientContact, ClientDraft, ClientNote, ClientPr
 import { migrateProjectsToClients } from '../stores/migrateProjectsToClients';
 import type { CodexSessionRecord, CodexRunRecord, CodexEventRecord, CodexPendingRecord, CodexOperationReceipt, CodexDocumentIntent } from './codex/sessionTypes';
 import { CLIENTS_V1_STORES } from './clients/schema';
-import { GITHUB_V1_STORES } from './github/schema';
-import type { GithubAccountRecord, GithubDraftRecord, GithubPrivateCacheRecord, GithubWorkspaceRecord } from './github/schema';
+import { OPEN_CODE_STORES, type OpenCodeChatRecord, type OpenCodeSubmissionRecord } from './openCode/schema';
 
 /** @deprecated Removed in v12 — folders now live inside Workspace objects. */
 export interface FileHandleRecord {
@@ -44,10 +43,8 @@ export class TabsDB extends Dexie {
   codexPendingRequests!: Table<CodexPendingRecord>;
   codexOperationReceipts!: Table<CodexOperationReceipt>;
   codexDocumentIntents!: Table<CodexDocumentIntent>;
-  githubAccounts!: Table<GithubAccountRecord>;
-  githubDrafts!: Table<GithubDraftRecord>;
-  githubWorkspaces!: Table<GithubWorkspaceRecord>;
-  githubPrivateCache!: Table<GithubPrivateCacheRecord>;
+  openCodeChats!: Table<OpenCodeChatRecord>;
+  openCodeSubmissions!: Table<OpenCodeSubmissionRecord>;
 
   constructor(name = 'ZenEditorDB') {
     super(name);
@@ -331,9 +328,54 @@ export class TabsDB extends Dexie {
       });
     });
     this.version(19).stores(CLIENTS_V1_STORES);
-    // v20: GitHub mode drafts, workspace selection, and sealed private cache.
-    // Tokens are not stored here. Existing tables are left untouched.
-    this.version(20).stores(GITHUB_V1_STORES);
+    // Historical schema retained so removing the workspace does not erase saved data.
+    this.version(20).stores({
+      githubAccounts: 'id, login',
+      githubDrafts: 'id, accountId, repoId, [accountId+repoId+ref], updatedAt',
+      githubWorkspaces: 'id, accountId, repoId, [accountId+repoId+ref]',
+      githubPrivateCache: 'id, accountId, repoId',
+    });
+    // Bindings and pending admissions only; transcripts remain in OpenCode.
+    // Legacy chat reset is applied separately when the execution path switches.
+    this.version(21).stores(OPEN_CODE_STORES);
+    // v22: approved prototype reset, not a transcript migration. Recovery state
+    // and OpenCode admission evidence must outlive the retired chat engines.
+    this.version(22).stores({}).upgrade(async (tx) => {
+      const protectedThreads = new Set<string>();
+      for (const binding of await tx.table<OpenCodeChatRecord>('openCodeChats').toArray()) {
+        protectedThreads.add(binding.id);
+      }
+      for (const submission of await tx.table<OpenCodeSubmissionRecord>('openCodeSubmissions').toArray()) {
+        protectedThreads.add(submission.chatId);
+      }
+      const legacyOrigins = new Set(['legacy_api', 'codex', 'grok', 'commandCode', 'mockEcho', 'mockTools']);
+      const threads = await tx.table<ChatThreadMeta>('chatThreads').toArray();
+      for (const thread of threads) {
+        // Old CLI OpenCode chats and new unmapped chats share this origin.
+        // Preserve ambiguous provenance and future engines instead of guessing.
+        if (thread.origin && !legacyOrigins.has(thread.origin)) protectedThreads.add(thread.id);
+      }
+      const legacyIds = threads.filter(thread => !protectedThreads.has(thread.id)).map(thread => thread.id);
+      await tx.table('chatThreads').bulkDelete(legacyIds);
+      await tx.table<ChatMessage>('chatMessages').filter(message => !protectedThreads.has(message.threadId)).delete();
+      // These are retired chat transport projections, not business recovery.
+      await tx.table('codexSessions').clear();
+      await tx.table('codexEvents').clear();
+      // Keep ALL codexRuns/pending/proposals, receipts and document intents.
+      // Business tools still read them, including runs from before OpenCode.
+      const legacyKeys = new Set([
+        'activeChatProviderId', 'chatMode', 'codexModelId', 'codexEffort', 'codexExecutablePath',
+        'codexModelVisibility', 'grokModelVisibility', 'commandCodeModelVisibility',
+        'providerModelId:grok', 'providerModelId:commandCode', 'providerModelId:openCode',
+      ]);
+      // Some existing WebView databases expose null cursor values. Preserve
+      // unreadable rows rather than aborting the upgrade or guessing deletions.
+      await tx.table<AppSettings>('settings').filter(setting => typeof setting?.key === 'string' && (legacyKeys.has(setting.key)
+        || /^providerReasoningEffort:(grok|commandCode|openCode):.+$/.test(setting.key)
+        || /^codexHandoff:.+$/.test(setting.key))).delete();
+      // Version 22 is the one-time marker. Do not touch credential-migration
+      // markers, provider account data, app preferences or OpenCode settings.
+    });
   }
 }
 

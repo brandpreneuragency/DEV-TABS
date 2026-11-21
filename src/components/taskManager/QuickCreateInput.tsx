@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Calendar, ChevronDown, Folder } from 'lucide-react';
+import { Building2, Calendar, ChevronDown, Folder } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   ComposerCard,
@@ -11,6 +11,7 @@ import {
 import { useTaskStore } from '../../stores/taskStore';
 import { useUIStore } from '../../stores/uiStore';
 import { usePlaceholder } from '../../utils/placeholders';
+import { useClientStore } from '../../stores/clientStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { projectsForClient, resolveQuickCreateProjectId } from '../../stores/taskSelection';
 import { parseTaskInput } from '../../services/nlpParser';
@@ -18,20 +19,64 @@ import { getTodayIso, getTomorrowIso } from '../../services/taskFormat';
 import { TASK_TITLE_MAX_LENGTH } from '../../types';
 import { TaskDueDatePicker } from './TaskCalendarDatePicker';
 
-import type { Project } from '../../types';
+function QuickCreateDropdown({
+  id,
+  ariaLabel,
+  show,
+  options,
+  onPick,
+  onClose,
+  triggerRef,
+}: {
+  id: string;
+  ariaLabel: string;
+  show: boolean;
+  options: { value: string; label: string }[];
+  onPick: (value: string) => void;
+  onClose: () => void;
+  triggerRef: { current: HTMLButtonElement | null };
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
 
-function ProjectDropdown({ show, projects, onPick }: { show: boolean; projects: Project[]; onPick: (name: string) => void }) {
+  useEffect(() => {
+    if (!show) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+      if (!items.length) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+        triggerRef.current?.focus();
+        return;
+      }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+      const nextIndex = event.key === 'Home' ? 0
+        : event.key === 'End' ? items.length - 1
+          : event.key === 'ArrowUp' ? (currentIndex <= 0 ? items.length - 1 : currentIndex - 1)
+            : currentIndex < 0 || currentIndex === items.length - 1 ? 0 : currentIndex + 1;
+      items[nextIndex]?.focus();
+    };
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [onClose, show, triggerRef]);
+
   if (!show) return null;
   return (
     <div
-      id="tqc-project-dropdown"
+      ref={menuRef}
+      id={id}
       className="drop"
+      role="menu"
+      aria-label={ariaLabel}
       onMouseDown={(event) => event.stopPropagation()}
       style={{ left: 0, bottom: '100%', minWidth: 192, marginBottom: 0 }}
     >
-      {projects.map((p) => (
-        <button key={p.id} type="button" className="ui-list-row drop-item" onClick={() => onPick(p.name)} style={{ fontSize: 'var(--fs-sm)' }}>
-          {p.name}
+      {options.map((option) => (
+        <button key={option.value || '__all__'} type="button" role="menuitem" className="ui-list-row drop-item" onClick={() => onPick(option.value)} style={{ fontSize: 'var(--fs-sm)' }}>
+          {option.label}
         </button>
       ))}
     </div>
@@ -58,6 +103,7 @@ export function QuickCreateInput({
   onSetProject,
 }: QuickCreateInputProps) {
   const [value, setValue] = useState('');
+  const [showClientPicker, setShowClientPicker] = useState(false);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [assignedDate, setAssignedDate] = useState<string | null>(assignedDateProp ?? null);
   const [assignedProject, setAssignedProject] = useState<string | null>(assignedProjectProp ?? null);
@@ -88,7 +134,9 @@ export function QuickCreateInput({
   const { createTask } = useTaskStore();
   const selectedClientId = useTaskStore((s) => s.selectedClientId);
   const selectedProjectId = useTaskStore((s) => s.selectedProjectId);
+  const setSelection = useTaskStore((s) => s.setSelection);
   const showToast = useUIStore((s) => s.showToast);
+  const { clients } = useClientStore();
   const { projects } = useProjectStore();
   const { t } = useTranslation();
   const clientProjects = projectsForClient(projects, selectedClientId);
@@ -98,7 +146,10 @@ export function QuickCreateInput({
     projects,
   );
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const clientRef = useRef<HTMLDivElement>(null);
+  const clientTriggerRef = useRef<HTMLButtonElement>(null);
   const projectRef = useRef<HTMLDivElement>(null);
+  const projectTriggerRef = useRef<HTMLButtonElement>(null);
   const addTaskPlaceholder = usePlaceholder('addTask');
   const parsed = value.trim() ? parseTaskInput(value) : null;
 
@@ -142,8 +193,10 @@ export function QuickCreateInput({
     (p) => p.name.toLowerCase() === effectiveProject?.toLowerCase(),
   )?.id ?? null;
   const resolvedProjectId = selectedProjectId ?? pickedProjectId ?? fallbackProjectId;
+  const selectedClientName = clients.find((client) => client.id === selectedClientId)?.name;
   const selectedProjectName = projects.find((project) => project.id === selectedProjectId)?.name;
   const hasProjectValue = !!(selectedProjectName || effectiveProject?.trim());
+  const clientButtonLabel = selectedClientName || t('tasks.allClients');
   const hasDateValue = !!effectiveDate?.trim();
   const projectButtonLabel = selectedProjectName || effectiveProject?.trim() || 'No Project';
   const dateButtonLabel = (() => {
@@ -194,15 +247,15 @@ export function QuickCreateInput({
   }, [prefillText, onClearPrefillText]);
 
   useEffect(() => {
-    if (!showProjectPicker) return;
+    if (!showClientPicker && !showProjectPicker) return;
     const handleClick = (e: MouseEvent) => {
-      if (projectRef.current && !projectRef.current.contains(e.target as Node)) {
-        setShowProjectPicker(false);
-      }
+      const target = e.target as Node;
+      if (clientRef.current && !clientRef.current.contains(target)) setShowClientPicker(false);
+      if (projectRef.current && !projectRef.current.contains(target)) setShowProjectPicker(false);
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [showProjectPicker]);
+  }, [showClientPicker, showProjectPicker]);
 
   const handleDatePick = (dateStr: string) => {
     handleSetDate(dateStr || null);
@@ -212,6 +265,14 @@ export function QuickCreateInput({
   const handleProjectPick = (name: string) => {
     handleSetProject(name);
     setShowProjectPicker(false);
+    inputRef.current?.focus();
+  };
+
+  const handleClientPick = (clientId: string) => {
+    setSelection(clientId || null, null);
+    handleSetProject(null);
+    setTransferredProject(null);
+    setShowClientPicker(false);
     inputRef.current?.focus();
   };
 
@@ -236,11 +297,45 @@ export function QuickCreateInput({
 
           {/* Row 2: Left dropups + right send button */}
           <ComposerRow className="task-quick-create-bottom-row">
-            <div ref={projectRef} className="task-quick-create-actions">
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="task-quick-create-actions">
+              <div ref={clientRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <button
+                  ref={clientTriggerRef}
                   type="button"
-                  onClick={() => setShowProjectPicker(!showProjectPicker)}
+                  onClick={() => {
+                    setShowClientPicker((current) => !current);
+                    setShowProjectPicker(false);
+                  }}
+                  className="ui-button task-quick-create-dropup-btn"
+                  data-kind="client"
+                  data-active={selectedClientName ? 'true' : 'false'}
+                  title={clientButtonLabel}
+                  aria-label={t('tasks.selectClient')}
+                  aria-haspopup="menu"
+                  aria-expanded={showClientPicker}
+                >
+                  {selectedClientName && <Building2 className="task-quick-create-dropup-icon" aria-hidden="true" />}
+                  <span className="trunc med task-quick-create-dropup-label">{clientButtonLabel}</span>
+                  <ChevronDown className="task-quick-create-dropup-chevron" aria-hidden="true" />
+                </button>
+                <QuickCreateDropdown
+                  id="tqc-client-dropdown"
+                  ariaLabel={t('tasks.selectClient')}
+                  show={showClientPicker}
+                  triggerRef={clientTriggerRef}
+                  options={[{ value: '', label: t('tasks.allClients') }, ...clients.map((client) => ({ value: client.id, label: client.name }))]}
+                  onPick={handleClientPick}
+                  onClose={() => setShowClientPicker(false)}
+                />
+              </div>
+              <div ref={projectRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  ref={projectTriggerRef}
+                  type="button"
+                  onClick={() => {
+                    setShowProjectPicker((current) => !current);
+                    setShowClientPicker(false);
+                  }}
                   disabled={!!selectedProjectId}
                   className="ui-button task-quick-create-dropup-btn"
                   data-kind="project"
@@ -256,7 +351,15 @@ export function QuickCreateInput({
                   <span className="trunc med task-quick-create-dropup-label">{projectButtonLabel}</span>
                   <ChevronDown className="task-quick-create-dropup-chevron" aria-hidden="true" />
                 </button>
-                <ProjectDropdown show={!selectedProjectId && showProjectPicker} projects={clientProjects} onPick={handleProjectPick} />
+                <QuickCreateDropdown
+                  id="tqc-project-dropdown"
+                  ariaLabel={t('tasks.selectProject')}
+                  show={!selectedProjectId && showProjectPicker}
+                  triggerRef={projectTriggerRef}
+                  options={clientProjects.map((project) => ({ value: project.name, label: project.name }))}
+                  onPick={handleProjectPick}
+                  onClose={() => setShowProjectPicker(false)}
+                />
               </div>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <TaskDueDatePicker

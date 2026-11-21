@@ -53,14 +53,9 @@ describe('TaskCalendarView', () => {
     vi.useRealTimers();
   });
 
-  it('places the shared assistant toggle beside the calendar view switch', () => {
+  it('does not offer an AI assistant on the calendar page', () => {
     setup();
-    const toggle = screen.getByRole('button', { name: 'Hide assistant' });
-    expect(toggle).toHaveAttribute('id', 'task-calendar-btn-assistant');
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('group', { name: 'calendar.view' }).nextElementSibling).toBe(toggle);
-    fireEvent.click(toggle);
-    expect(toggleAssistantWrapper).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /assistant/i })).not.toBeInTheDocument();
   });
 
   it('starts with seven Monday-first days and opens and adds tasks on the exact local date', () => {
@@ -68,9 +63,10 @@ describe('TaskCalendarView', () => {
     expect(screen.getAllByRole('region')).toHaveLength(8);
     expect(screen.getByRole('region', { name: '2026-09-14' })).toBeInTheDocument();
     const day = screen.getByRole('region', { name: '2026-09-15' });
+    expect(day.querySelector('.task-calendar-day-label')?.textContent).toBe('Sal15Eyl');
     fireEvent.click(within(day).getByText(task.title));
     expect(openTaskInActiveTab).toHaveBeenCalledWith(task.id);
-    expect(setActiveTaskPage).toHaveBeenCalledWith('list');
+    expect(setActiveTaskPage).not.toHaveBeenCalled();
     fireEvent.click(within(day).getByRole('button', { name: 'calendar.addTask 2026-09-15' }));
     expect(within(day).getByRole('textbox', { name: 'tasks.taskTitlePlaceholder' })).toBeInTheDocument();
     expect(add).not.toHaveBeenCalled();

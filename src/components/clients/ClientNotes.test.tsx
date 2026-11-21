@@ -43,6 +43,19 @@ afterEach(async () => {
 });
 
 describe('ClientNotes', () => {
+  it('reveals and focuses an exact overview note beyond the first page without opening an editor', async () => {
+    await fixture.database.clientNotes.bulkAdd(Array.from({ length: 53 }, (_, index) => makeNote(`note-${index}`, index)));
+    const { rerender } = render(<ClientNotes clientId="client-a" records={fixture.records} database={fixture.database} focusNoteId="note-0" />);
+    const target = await screen.findByRole('article', { name: 'Project update 00' });
+    await waitFor(() => expect(target).toHaveFocus());
+    expect(target).toHaveAttribute('data-note-id', 'note-0');
+    expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
+    expect(await fixture.database.clientDrafts.count()).toBe(0);
+    rerender(<ClientNotes clientId="client-b" records={fixture.records} database={fixture.database} focusNoteId="note-0" />);
+    expect(screen.queryByRole('article', { name: 'Project update 00' })).not.toBeInTheDocument();
+    expect(await screen.findByText('No notes for this client yet.')).toBeInTheDocument();
+  });
+
   it('filters real notes and loads more than the first 50 without changing stable note identity', async () => {
     await fixture.database.clientNotes.bulkAdd(Array.from({ length: 53 }, (_, index) => makeNote(`note-${index}`, index)));
     render(<ClientNotes clientId="client-a" records={fixture.records} database={fixture.database} />);

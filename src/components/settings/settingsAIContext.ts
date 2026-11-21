@@ -4,7 +4,6 @@ const SECTION_LABELS: Record<SettingsSubTab, string> = {
   tools: 'Tools (Codex connection, models, and reasoning)',
   actions: 'Actions',
   appearance: 'Appearance',
-  agents: 'Agents',
 };
 
 /**

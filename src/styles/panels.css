@@ -16,7 +16,7 @@
 
 /* ---- Left panel â€” file tree ---------------------------- */
 #file-tree-panel {
-  background-color: var(--c-background-2);
+  background-color: var(--c-background-3);
   border: none;
   border-radius: var(--radius-sm);
   padding: 0;
@@ -56,12 +56,11 @@
 }
 
 #editor-column {
-  padding: var(--c-space-3);
   margin-left: 0;
   margin-right: 0;
   gap: 0;
   height: 100%;
-  background: var(--c-background-2);
+  background: var(--c-background-3);
   border: none;
 }
 
@@ -133,13 +132,12 @@
 
 /* ---- Right panel â€” AI sidebar / file viewer ----------- */
 #ai-sidebar-panel {
-  background: var(--c-background-2);
+  background: transparent;
   padding: 0;
   display: flex;
   flex-direction: column;
   height: 100%;
   border: none;
-  border-left: none;
   border-image: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;

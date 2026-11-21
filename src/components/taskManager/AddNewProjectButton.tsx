@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode, type HTMLAttributes } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode, type ButtonHTMLAttributes } from 'react';
 import { Check, Folder, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../stores/projectStore';
@@ -12,11 +12,12 @@ interface AddNewProjectButtonProps {
   label?: string;
   onCreated?: (project: Project) => void;
   inlineGroupLabel?: string;
-  inlineGroupLabelProps?: HTMLAttributes<HTMLSpanElement>;
+  inlineGroupIcon?: ReactNode;
+  inlineGroupLabelProps?: ButtonHTMLAttributes<HTMLButtonElement>;
   children?: ReactNode;
 }
 
-export function AddNewProjectButton({ clientId, label, onCreated, inlineGroupLabel, inlineGroupLabelProps, children }: AddNewProjectButtonProps) {
+export function AddNewProjectButton({ clientId, label, onCreated, inlineGroupLabel, inlineGroupIcon, inlineGroupLabelProps, children }: AddNewProjectButtonProps) {
   const { t } = useTranslation();
   const resolvedLabel = label ?? t('tasks.addNewProject');
   const createProject = useProjectStore((s) => s.createProject);
@@ -84,7 +85,12 @@ export function AddNewProjectButton({ clientId, label, onCreated, inlineGroupLab
   return (
     <div className={inlineGroupLabel !== undefined ? 'scope-project-content' : 'task-list-add-project'} ref={rootRef}>
       <div className={inlineGroupLabel !== undefined ? 'scope-project-heading' : undefined}>
-      {inlineGroupLabel !== undefined && <span title={inlineGroupLabel} {...inlineGroupLabelProps}>{inlineGroupLabel}</span>}
+      {inlineGroupLabel !== undefined && inlineGroupIcon}
+      {inlineGroupLabel !== undefined && (
+        <button type="button" className="scope-project-client-label" title={inlineGroupLabel} {...inlineGroupLabelProps}>
+          <span>{inlineGroupLabel}</span>
+        </button>
+      )}
       <button
         ref={triggerRef}
         type="button"

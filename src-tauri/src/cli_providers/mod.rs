@@ -1,7 +1,6 @@
 pub(crate) mod discovery;
 mod parsers;
 pub(crate) mod process;
-pub(crate) mod runs;
 
 use std::time::Duration;
 
@@ -193,7 +192,6 @@ pub fn probe(provider_id: &str) -> CliProviderProbe {
                     if let Some(docs) = command_code_model_docs(&launch) {
                         parsers::enrich_command_code_models_with_docs(&mut result.models, &docs);
                     }
-                    runs::remember_command_code_model_efforts(&result.models);
                 }
                 Err(message) if result.error.is_none() => result.error = Some(message),
                 Err(_) => {}
@@ -225,7 +223,6 @@ pub fn probe(provider_id: &str) -> CliProviderProbe {
                             );
                         }
                     }
-                    runs::remember_open_code_model_efforts(&result.models);
                 }
                 Err(message) if result.error.is_none() => result.error = Some(message),
                 Err(_) => {}

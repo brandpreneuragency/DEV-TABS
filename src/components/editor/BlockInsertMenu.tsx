@@ -23,9 +23,9 @@ interface HoveredBlock {
   left: number;
 }
 
-const HANDLE_SIZE = 12;
+const HANDLE_SIZE = 24;
 /** Place the handle in the left gutter, just before TipTap text. */
-const GUTTER_GAP = 10;
+const GUTTER_GAP = 6;
 
 function getEmptyParagraphPosition(editor: Editor, position: number): number | null {
   try {

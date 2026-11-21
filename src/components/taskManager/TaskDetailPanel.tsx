@@ -40,7 +40,7 @@ export function TaskDetailPanel() {
     <div id="task-detail-panel" className="panel flex-col flex-1 min-h-0" style={{ background: 'rgba(233, 233, 233, 0)' }}>
 
       <div className="tdp-overlay-region">
-        <div id="tdc-thread" ref={threadRef} className="panel-body ai-scroll flex-1 overflow-y-a" style={{ padding: 0 }}>
+        <div id="tdc-thread" ref={threadRef} className="panel-body ai-scroll flex-1 overflow-y-a">
           <TaskCommentThread comments={comments} onReplyComment={setReplyToComment} />
         </div>
       </div>

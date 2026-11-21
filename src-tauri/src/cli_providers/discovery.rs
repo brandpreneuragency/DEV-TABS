@@ -62,6 +62,18 @@ fn node_for_shim(shim: &Path) -> Option<PathBuf> {
         .or_else(|| find_on_path(&["node.exe"]))
 }
 
+fn open_code_in_npm_directory(directory: &Path) -> Option<PathBuf> {
+    ["@opencode/cli", "opencode-ai"].iter().find_map(|package| {
+        existing_file(
+            directory
+                .join("node_modules")
+                .join(package)
+                .join("bin")
+                .join("opencode.exe"),
+        )
+    })
+}
+
 pub fn discover(provider_id: &str) -> Result<Launch, &'static str> {
     match provider_id {
         "grok" => {
@@ -110,13 +122,7 @@ pub fn discover(provider_id: &str) -> Result<Launch, &'static str> {
             let native = native.or_else(|| {
                 let shim = npm_shim(&["opencode.cmd"])?;
                 let directory = shim.parent()?;
-                existing_file(
-                    directory
-                        .join("node_modules")
-                        .join("opencode-ai")
-                        .join("bin")
-                        .join("opencode.exe"),
-                )
+                open_code_in_npm_directory(directory)
             });
             let native = native.ok_or("OpenCode CLI was not found. Install it and reopen TABS.")?;
             Ok(Launch {
@@ -134,6 +140,27 @@ mod tests {
     use std::path::Path;
 
     use super::cli_path;
+
+    #[test]
+    fn finds_v2_npm_binary_and_keeps_legacy_fallback() {
+        let root = tempfile::tempdir_in(
+            std::env::var_os("TMPDIR").unwrap_or_else(|| std::env::temp_dir().into_os_string()),
+        )
+        .unwrap();
+        for package in ["opencode-ai", "@opencode/cli"] {
+            let path = root
+                .path()
+                .join("node_modules")
+                .join(package)
+                .join("bin/opencode.exe");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, b"fixture").unwrap();
+            assert_eq!(
+                super::open_code_in_npm_directory(root.path()),
+                Some(path.canonicalize().unwrap())
+            );
+        }
+    }
 
     #[cfg(windows)]
     #[test]

@@ -49,7 +49,6 @@ export function ClientsCategoryPanel() {
   return (
     <section className="ui-panel-body clients-category-panel" aria-label={t('clients.categoryNavigation')}>
       <header className="clients-category-heading">
-        <span className="clients-category-eyebrow">{t('navigation.clients')}</span>
         <h2 className="clients-category-identity" title={identity}>{identity}</h2>
       </header>
       <div className="clients-category-tabs" role="tablist" aria-label={t('clients.categoryNavigation')}

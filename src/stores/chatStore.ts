@@ -2,17 +2,29 @@
 // Threads and messages stored in IndexedDB.
 
 import { create } from 'zustand';
-import type { ChatMessage, ChatProviderId, ChatThreadMeta } from '../types';
+import type { ChatMessage, ChatThreadMeta } from '../types';
 import { db } from '../services/db';
 import { nanoid } from 'nanoid';
+import { openCodeSessionService } from '../services/openCode/sessionService';
+import { cancelToolContext } from '../services/openCode/toolBridge';
+
+export interface ChatContext {
+  workspaceId?: string;
+  taskId?: string;
+  settingsTab?: string;
+  memoryId?: string;
+}
 
 /** Context key for lastViewedPerContext map. */
-function contextKey(params: { workspaceId?: string; taskId?: string; settingsTab?: string }): string | null {
+function contextKey(params: ChatContext): string | null {
+  if (params.memoryId) return `memory:${params.memoryId}`;
   if (params.workspaceId) return `ws:${params.workspaceId}`;
   if (params.taskId) return `task:${params.taskId}`;
   if (params.settingsTab) return `settings:${params.settingsTab}`;
   return null;
 }
+
+let contextLoadGeneration = 0;
 
 interface ChatStore {
   threads: ChatThreadMeta[];
@@ -20,14 +32,15 @@ interface ChatStore {
   messagesByThread: Record<string, ChatMessage[]>;
 
   // Context tracking
-  currentContext: { workspaceId?: string; taskId?: string; settingsTab?: string } | null;
+  currentContext: ChatContext | null;
+  contextLoading: boolean;
   lastViewedPerContext: Record<string, string>;
 
-  loadThreadsForContext: (params: { workspaceId?: string; taskId?: string; settingsTab?: string }) => Promise<void>;
-  setActiveContext: (params: { workspaceId?: string; taskId?: string; settingsTab?: string }) => void;
-  newChat: (params: { mode: 'writer' | 'task'; workspaceId?: string; taskId?: string; settingsTab?: string; origin?: ChatProviderId }) => Promise<void>;
+  loadThreadsForContext: (params: ChatContext) => Promise<void>;
+  setActiveContext: (params: ChatContext) => void;
+  newChat: (params: ChatContext & { mode: 'writer' | 'task' }) => Promise<void>;
   /** Changes an empty local thread before it receives its first message. */
-  setEmptyThreadOrigin: (threadId: string, origin: ChatProviderId) => Promise<boolean>;
+  setEmptyThreadOpenCode: (threadId: string) => Promise<boolean>;
   selectThread: (threadId: string) => Promise<void>;
   deleteThread: (id: string) => Promise<void>;
   addMessage: (msg: ChatMessage) => Promise<void>;
@@ -44,12 +57,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   activeThreadId: null,
   messagesByThread: {},
   currentContext: null,
+  contextLoading: false,
   lastViewedPerContext: {},
 
   loadThreadsForContext: async (params) => {
+    const generation = ++contextLoadGeneration;
+    const previousActiveThreadId = get().activeThreadId;
+    // Never show or send to the previous context while the new list is loading.
+    set({ currentContext: params, contextLoading: true, threads: [], activeThreadId: null });
     try {
       let threads: ChatThreadMeta[] = [];
-      if (params.workspaceId) {
+      if (params.memoryId) {
+        // memoryId is deliberately unindexed: existing databases need no migration.
+        threads = await db.chatThreads.filter((thread) => thread.memoryId === params.memoryId).toArray();
+      } else if (params.workspaceId) {
         threads = await db.chatThreads
           .where('workspaceId')
           .equals(params.workspaceId)
@@ -66,17 +87,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           .toArray();
       }
 
-      set({ threads, currentContext: params });
-
+      if (generation !== contextLoadGeneration) return;
       // Auto-select the thread already associated with this context when possible.
       const key = contextKey(params);
       if (key) {
         const lastViewed = get().lastViewedPerContext[key];
-        const currentActiveThreadId = get().activeThreadId;
-        const preferredThreadId = lastViewed ?? currentActiveThreadId;
+        const preferredThreadId = lastViewed ?? previousActiveThreadId;
         const match = preferredThreadId && threads.find((t) => t.id === preferredThreadId);
+        set({ threads, contextLoading: false, activeThreadId: match ? match.id : null });
         if (match) {
-          set({ activeThreadId: match.id });
           if (lastViewed !== match.id) {
             set((s) => ({
               lastViewedPerContext: { ...s.lastViewedPerContext, [key]: match.id },
@@ -94,14 +113,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           } catch {
             // Will load on demand
           }
-        } else {
-          set({ activeThreadId: null });
         }
       } else {
-        set({ activeThreadId: null });
+        set({ threads, contextLoading: false, activeThreadId: null });
       }
     } catch {
-      // Keep the previous list on transient errors.
+      if (generation === contextLoadGeneration) set({ contextLoading: false });
     }
   },
 
@@ -111,14 +128,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       !current ||
       current.workspaceId !== params.workspaceId ||
       current.taskId !== params.taskId ||
-      current.settingsTab !== params.settingsTab;
+      current.settingsTab !== params.settingsTab ||
+      current.memoryId !== params.memoryId;
     if (changed) {
       get().loadThreadsForContext(params);
     }
   },
 
   newChat: async (params) => {
-    const savedProvider = params.origin ?? await loadActiveChatProvider();
     const id = nanoid(8);
     const nowMs = Date.now();
     const key = contextKey(params);
@@ -129,11 +146,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const title = `${datePrefix}-chat-${String(seq).padStart(2, '0')}`;
     const optimistic: ChatThreadMeta = {
       id,
-      origin: savedProvider,
+      origin: 'openCode',
       mode: params.mode,
       workspaceId: params.workspaceId ?? undefined,
       taskId: params.taskId ?? undefined,
       settingsTab: params.settingsTab ?? undefined,
+      memoryId: params.memoryId ?? undefined,
       title,
       createdAt: nowMs,
       updatedAt: nowMs,
@@ -280,6 +298,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   deleteThread: async (id) => {
+    const openCodeBinding = await db.openCodeChats.get(id);
+    const targetThread = get().threads.find((thread) => thread.id === id) ?? await db.chatThreads.get(id);
+    if (openCodeBinding || targetThread?.origin === 'openCode') {
+      await openCodeSessionService.assertLocalChatDeletionAllowed(id);
+      if (openCodeBinding) {
+        cancelToolContext(openCodeBinding.sessionID);
+        await db.openCodeChats.delete(id);
+      }
+    }
     // Optimistically remove from local state.
     const prev = get().threads;
     const prevActive = get().activeThreadId;
@@ -362,7 +389,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }));
   },
 
-  setEmptyThreadOrigin: async (threadId, origin) => {
+  setEmptyThreadOpenCode: async (threadId) => {
     const thread = get().threads.find((item) => item.id === threadId);
     if (!thread || thread.origin === 'legacy_api' || thread.origin === 'mockEcho' || thread.origin === 'mockTools') return false;
     try {
@@ -371,12 +398,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         if (!persisted || persisted.origin === 'legacy_api' || persisted.origin === 'mockEcho' || persisted.origin === 'mockTools') return false;
         const messageCount = await db.chatMessages.where('threadId').equals(threadId).count();
         if (messageCount > 0) return false;
-        await db.chatThreads.update(threadId, { origin });
+        await db.chatThreads.update(threadId, { origin: 'openCode' });
         return true;
       });
       if (changed) {
         set((state) => ({
-          threads: state.threads.map((item) => item.id === threadId ? { ...item, origin } : item),
+          threads: state.threads.map((item) => item.id === threadId ? { ...item, origin: 'openCode' } : item),
         }));
       }
       return changed;
@@ -410,15 +437,4 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
 function replaceOrRemoveMessage(messages: ChatMessage[], id: string): ChatMessage[] {
   return messages.filter((m) => m.id !== id);
-}
-
-const chatProviderIds: ChatProviderId[] = ['codex', 'grok', 'commandCode', 'openCode'];
-
-function isChatProviderId(value: unknown): value is ChatProviderId {
-  return typeof value === 'string' && chatProviderIds.includes(value as ChatProviderId);
-}
-
-async function loadActiveChatProvider(): Promise<ChatProviderId> {
-  const saved = await db.settings.get('activeChatProviderId');
-  return isChatProviderId(saved?.value) ? saved.value : 'codex';
 }

@@ -1,4 +1,4 @@
-import { CalendarDays, FileText, Folder, Gauge, GitBranch, List, PanelLeftClose, PanelLeftOpen, Settings, StickyNote, TerminalSquare, Users } from 'lucide-react';
+import { BookOpen, CalendarDays, FileText, Folder, Gauge, List, PanelLeftClose, PanelLeftOpen, Settings, StickyNote, TerminalSquare, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { enterClients } from '../../services/clients/navigation';
 import { useUIStore } from '../../stores/uiStore';
@@ -6,7 +6,6 @@ import { useUIStore } from '../../stores/uiStore';
 export function ModeNavigation() {
   const { t } = useTranslation();
   const taskMode = useUIStore((state) => state.taskMode);
-  const githubMode = useUIStore((state) => state.githubMode);
   const crmMode = useUIStore((state) => state.crmMode);
   const activeView = useUIStore((state) => state.activeView);
   const taskPage = useUIStore((state) => state.activeTaskPage);
@@ -14,10 +13,12 @@ export function ModeNavigation() {
   const terminalOpen = useUIStore((state) => state.terminalPanelOpen);
   const navigationCollapsed = useUIStore((state) => state.navigationCollapsed);
   const setNavigationCollapsed = useUIStore((state) => state.setNavigationCollapsed);
-  const settingsActive = !githubMode && !taskMode && !crmMode && activeView === 'settings';
-  const docsActive = !githubMode && !taskMode && !crmMode && activeView === 'document';
-  const notesActive = !githubMode && !taskMode && !crmMode && activeView === 'notes';
-  const accountsActive = !githubMode && !taskMode && !crmMode && activeView === 'providerAccounts';
+  const settingsActive = !taskMode && !crmMode && activeView === 'settings';
+  const docsActive = !taskMode && !crmMode && activeView === 'document';
+  const notesActive = !taskMode && !crmMode && activeView === 'notes';
+  const memoryActive = !taskMode && !crmMode && activeView === 'memory';
+  const accountsActive = !taskMode && !crmMode && activeView === 'providerAccounts';
+  const scriptsActive = !taskMode && !crmMode && activeView === 'scripts';
 
   return (
     <nav className="mode-navigation" aria-label={t('navigation.modes')}>
@@ -52,12 +53,6 @@ export function ModeNavigation() {
         }}>
         <FileText className="ui-icon"  /><span>{t('navigation.docs')}</span>
       </button>
-      <span className="mode-navigation-separator" aria-hidden="true">|</span>
-      <button id="nav-btn-github" type="button" className="header-mode" aria-pressed={githubMode}
-        onClick={() => useUIStore.getState().setGithubMode(!githubMode)}>
-        <GitBranch className="ui-icon"  /><span>{t('navigation.github')}</span>
-      </button>
-      <span className="mode-navigation-separator" aria-hidden="true">|</span>
         <button id="nav-btn-tasks" type="button" className="header-mode" aria-pressed={taskMode && taskPage === 'list'}
           onClick={() => {
             const ui = useUIStore.getState();
@@ -76,6 +71,28 @@ export function ModeNavigation() {
           }}>
           <CalendarDays className="ui-icon"  /><span>{t('navigation.calendar')}</span>
         </button>
+        <span className="mode-navigation-separator" aria-hidden="true">|</span>
+        <button id="nav-btn-notes" type="button" className="header-mode" aria-pressed={notesActive}
+          onClick={() => useUIStore.getState().setActiveView('notes')}>
+          <StickyNote className="ui-icon"  /><span>{t('navigation.notes')}</span>
+        </button>
+        <button id="nav-btn-memory" type="button" className="header-mode" aria-label={t('navigation.memory')} aria-pressed={memoryActive}
+          onClick={() => useUIStore.getState().setActiveView('memory')}>
+          <BookOpen className="ui-icon" /><span>{t('navigation.memory')}</span>
+        </button>
+        <button id="nav-btn-provider-accounts" type="button" className="header-mode" aria-pressed={accountsActive}
+          onClick={() => useUIStore.getState().setActiveView('providerAccounts')}>
+          <Gauge className="ui-icon" /><span>{t('navigation.providerAccounts')}</span>
+        </button>
+        <button id="nav-btn-scripts" type="button" className="header-mode" aria-pressed={scriptsActive}
+          onClick={() => useUIStore.getState().setActiveView('scripts')}>
+          <TerminalSquare className="ui-icon" /><span>{t('scripts.title')}</span>
+        </button>
+        <span className="mode-navigation-separator" aria-hidden="true">|</span>
+        <button id="nav-btn-clients" type="button" className="header-mode" aria-pressed={crmMode && clientPage === 'clients'}
+          onClick={enterClients}>
+          <Users className="ui-icon"  /><span>{t('navigation.clients')}</span>
+        </button>
         <button id="nav-btn-projects" type="button" className="header-mode" aria-pressed={crmMode && clientPage === 'projects'}
           onClick={() => {
             const ui = useUIStore.getState();
@@ -84,19 +101,6 @@ export function ModeNavigation() {
             ui.setContextPanelOpen('crm', true);
           }}>
           <Folder className="ui-icon"  /><span>{t('navigation.projects')}</span>
-        </button>
-        <span className="mode-navigation-separator" aria-hidden="true">|</span>
-        <button id="nav-btn-notes" type="button" className="header-mode" aria-pressed={notesActive}
-          onClick={() => useUIStore.getState().setActiveView('notes')}>
-          <StickyNote className="ui-icon"  /><span>{t('navigation.notes')}</span>
-        </button>
-        <button id="nav-btn-clients" type="button" className="header-mode" aria-pressed={crmMode && clientPage === 'clients'}
-          onClick={enterClients}>
-          <Users className="ui-icon"  /><span>{t('navigation.clients')}</span>
-        </button>
-        <button id="nav-btn-provider-accounts" type="button" className="header-mode" aria-pressed={accountsActive}
-          onClick={() => useUIStore.getState().setActiveView('providerAccounts')}>
-          <Gauge className="ui-icon" /><span>{t('navigation.providerAccounts')}</span>
         </button>
     </nav>
   );

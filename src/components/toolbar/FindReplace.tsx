@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, type RefObject } from 'react';
 import { X, ChevronUp, ChevronDown, Replace } from 'lucide-react';
 import type { Editor } from '@tiptap/react';
 import { useUIStore } from '../../stores/uiStore';
+import { isTextFileDocument, parseTxt, serialize } from '../../services/fileFormat';
 
 interface FindReplaceProps {
   editor: Editor | null;
@@ -73,10 +74,15 @@ export function FindReplace({ editor, anchorRef }: FindReplaceProps) {
 
   const handleReplaceAll = () => {
     if (!editor || !findText) return;
-    const content = editor.getHTML();
     const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const replaced = content.replace(new RegExp(escaped, 'gi'), replaceText);
-    editor.commands.setContent(replaced);
+    const regex = new RegExp(escaped, 'gi');
+    if (isTextFileDocument(editor.state.doc)) {
+      const text = serialize(editor.getJSON(), 'txt').replace(regex, () => replaceText);
+      const language: unknown = editor.state.doc.firstChild?.attrs.language;
+      editor.commands.setContent(parseTxt(text, typeof language === 'string' ? language : null));
+    } else {
+      editor.commands.setContent(editor.getHTML().replace(regex, replaceText));
+    }
     setMatchCount(0);
   };
 

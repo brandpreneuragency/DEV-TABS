@@ -554,9 +554,12 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     try {
       const threads = await db.chatThreads.where('workspaceId').equals(id).toArray();
       for (const thread of threads) {
+        // OpenCode receipts and session bindings outlive workspace cleanup so
+        // an uncertain prompt can still be reconciled from chat history.
+        if (thread.origin === 'openCode') continue;
         await db.chatMessages.where('threadId').equals(thread.id).delete();
+        await db.chatThreads.delete(thread.id);
       }
-      await db.chatThreads.where('workspaceId').equals(id).delete();
     } catch (err) {
       console.warn('[workspaceStore] failed to delete associated chat:', err);
     }

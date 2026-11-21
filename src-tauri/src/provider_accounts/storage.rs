@@ -1,4 +1,4 @@
-use super::model::{initial_accounts, slot_index, ProviderAccount};
+use super::model::{initial_accounts, ProviderAccount};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -42,29 +42,43 @@ pub fn directory(parent: &Path, name: &str) -> Result<PathBuf, String> {
         .map_err(|_| "Could not resolve provider account directory".into())
 }
 
-fn validate(accounts: &[ProviderAccount]) -> Result<(), String> {
-    let expected = initial_accounts();
+fn validate(accounts: &[ProviderAccount], expected: &[ProviderAccount]) -> Result<(), String> {
     if accounts.len() != expected.len() {
         return Err(STORAGE_ERROR.into());
     }
     for (index, a) in accounts.iter().enumerate() {
-        if slot_index(&a.id)? != index || a.provider_id != "openai-codex" || a.label.len() > 256 {
+        if a.id != expected[index].id
+            || a.provider_id != expected[index].provider_id
+            || a.label.len() > 256
+        {
             return Err(STORAGE_ERROR.into());
         }
         if let Some(id) = &a.duplicate_of {
-            slot_index(id)?;
+            if !expected
+                .iter()
+                .any(|other| other.id == *id && other.provider_id == a.provider_id)
+            {
+                return Err(STORAGE_ERROR.into());
+            }
         }
     }
     Ok(())
 }
 
 pub fn load(root: &Path) -> Result<Vec<ProviderAccount>, String> {
+    load_for(root, &initial_accounts())
+}
+
+pub(super) fn load_for(
+    root: &Path,
+    expected: &[ProviderAccount],
+) -> Result<Vec<ProviderAccount>, String> {
     reject_link(root)?;
     let path = root.join("accounts.json");
     reject_link(&path)?;
     let file = match std::fs::File::open(path) {
         Ok(file) => file,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(initial_accounts()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(expected.to_vec()),
         Err(_) => return Err(STORAGE_ERROR.into()),
     };
     let mut bytes = Vec::new();
@@ -76,15 +90,23 @@ pub fn load(root: &Path) -> Result<Vec<ProviderAccount>, String> {
     }
     let accounts: Vec<ProviderAccount> =
         serde_json::from_slice(&bytes).map_err(|_| STORAGE_ERROR)?;
-    validate(&accounts)?;
+    validate(&accounts, expected)?;
     Ok(accounts)
 }
 
 /// Caller serializes the entire read/modify/write under the store's metadata lock.
 /// Never repair, truncate, rename away or overwrite a corrupt existing snapshot.
 pub fn save(root: &Path, accounts: &[ProviderAccount]) -> Result<(), String> {
-    let _ = load(root)?;
-    validate(accounts)?;
+    save_for(root, accounts, &initial_accounts())
+}
+
+pub(super) fn save_for(
+    root: &Path,
+    accounts: &[ProviderAccount],
+    expected: &[ProviderAccount],
+) -> Result<(), String> {
+    let _ = load_for(root, expected)?;
+    validate(accounts, expected)?;
     let mut file =
         tempfile::NamedTempFile::new_in(root).map_err(|_| "Could not stage account snapshots")?;
     let bytes =

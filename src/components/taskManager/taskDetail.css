@@ -208,12 +208,13 @@
   cursor: grabbing;
 }
 
-.tdp-overlay-region {
+#task-detail-panel > .tdp-overlay-region {
   position: relative;
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  padding: 0 var(--c-gap-1);
 }
 
 .tdp-subtasks-dropdown {
@@ -473,7 +474,7 @@
   min-height: 0;
   height: fit-content;
   width: 100%;
-  padding: var(--c-space-1);
+  padding: var(--c-space-0) var(--c-space-0) var(--c-space-1);
   background: transparent;
   border-bottom: none;
   z-index: 2;
@@ -488,7 +489,7 @@
 #task-comment-card {
   background-color: var(--c-background-3);
   border-radius: var(--radius-sm);
-  border: none;
+  border: var(--border-width) solid var(--c-border-1);
   padding-left: 0px;
   padding-right: 0px;
   padding-bottom: 0;
@@ -499,7 +500,7 @@
 #task-comment-card .composer-input {
   border: none;
   background-color: rgba(255, 255, 255, 0);
-  padding: 18px 18px 0;
+  padding: 14px 14px 0;
   min-height: 42px;
   line-height: var(--line-normal);
   /* Native resize handle is replaced by a custom top-right handle. */
@@ -528,11 +529,12 @@
   content: '';
   width: 8px;
   height: 2px;
-  border-top: 1px solid var(--c-border-2);
-  border-bottom: 1px solid var(--c-border-2);
-  opacity: 0.6;
+  border-top: 1px solid var(--c-border-0);
+  border-bottom: 1px solid var(--c-border-0);
+  opacity: 1;
 }
 #task-comment-card .composer-resize-handle:hover::before {
+  border-color: var(--c-border-2);
   opacity: 1;
 }
 #task-comment-card .task-comment-bottom-row {
@@ -628,8 +630,8 @@
   background: var(--c-background-2);
   border-radius: var(--radius-sm);
   border: none;
-  margin-top: 3px;
-  margin-bottom: 3px;
+  margin-top: 0;
+  margin-bottom: 0;
   padding: 0;
   width: fit-content;
   height: fit-content;
@@ -643,13 +645,13 @@
 .comment-bubble p.txt-xs {
   margin: 0;
   width: fit-content;
-  height: var(--control-height-sm);
+  height: auto;
   line-height: var(--line-normal);
-  padding-top: 0px;
-  padding-right: 10px;
-  padding-bottom: 0;
-  padding-left: 10px;
-  background-color: var(--c-background-2a);
+  padding-top: var(--c-space-1);
+  padding-right: var(--c-space-1);
+  padding-bottom: var(--c-space-1);
+  padding-left: var(--c-space-1);
+  background-color: var(--c-accent-2a);
   border-width: 0px;
   border-style: solid;
   border-color: var(--c-border-1);
@@ -781,12 +783,14 @@
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
   padding-left: 0;
   padding-right: 0;
-  background: unset;
-  background-color: unset;
+  background: var(--c-background-3);
+  border: none;
+  border-radius: 0px;
   margin-top: 0;
-  border-bottom: none;
 }
 :root #tdc-subtasks {
   border-radius: var(--radius-sm) !important;
@@ -844,8 +848,9 @@
   min-height: 0;
   height: fit-content;
   width: 100%;
-  padding: var(--c-space-1);
+  padding: var(--c-space-0) var(--c-space-0) var(--c-space-1);
   background: transparent;
+  border-width: var(--border-width);
   border-bottom: none;
   z-index: 2;
 }
@@ -855,13 +860,12 @@
   height: fit-content;
   background-color: var(--c-background-2);
   border-radius: var(--radius-sm);
+  border: var(--border-width) solid var(--c-border-1);
+  border-style: none;
 }
 :root #task-comment-thread {
   background: transparent;
-  padding-top: 0;
-  padding-bottom: 0;
-  padding-left: var(--c-space-3);
-  padding-right: var(--c-space-1);
+  padding: 0 4px 0 2px;
   width: 100%;
   justify-content: flex-start;
   align-items: flex-start;
@@ -880,8 +884,8 @@
   gap: 0;
   background: var(--c-background-2);
   border-radius: var(--radius-sm);
-  margin-top: 3px;
-  margin-bottom: 3px;
+  margin-top: 0;
+  margin-bottom: 0;
   padding: 0;
   width: fit-content;
   height: fit-content;
@@ -896,13 +900,13 @@
 :root .comment-bubble p.txt-xs {
   margin: 0;
   width: fit-content;
-  height: var(--control-height-sm);
+  height: auto;
   line-height: var(--line-normal);
-  padding-top: 0px;
-  padding-right: 10px;
-  padding-bottom: 0;
-  padding-left: 10px;
-  background-color: var(--c-background-2a);
+  padding-top: var(--c-space-1);
+  padding-right: var(--c-space-1);
+  padding-bottom: var(--c-space-1);
+  padding-left: var(--c-space-1);
+  background-color: var(--c-accent-2a);
   border-width: 0px;
   border-style: solid;
   border-color: var(--c-border-1);

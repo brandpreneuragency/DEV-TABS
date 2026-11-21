@@ -2,7 +2,7 @@
 
 :root :is(
   .crm-kanban-card, .notes-card, [data-ws-tab-id],
-  .scope-tab[draggable='true'], .scope-project-heading > span[draggable='true'],
+  .scope-tab[draggable='true'], .scope-project-heading > button[draggable='true'],
   [data-tree-node] > .row-xs, [data-action-row], [data-client-id]
 ) {
   transition: opacity var(--drag-duration) var(--drag-ease),
@@ -82,7 +82,7 @@
 @media (prefers-reduced-motion: reduce) {
     :root :is(
     .crm-kanban-card, .notes-card, [data-ws-tab-id], .scope-tab[draggable='true'],
-    .scope-project-heading > span[draggable='true'], [data-tree-node] > .row-xs,
+    .scope-project-heading > button[draggable='true'], [data-tree-node] > .row-xs,
     [data-action-row], [data-client-id], .crm-kanban-column, .crm-kanban-column-body
   ) { transition: none; }
 }

@@ -139,7 +139,7 @@
   left: 50%;
   width: 1px;
   transform: translateX(-50%);
-  background: var(--c-border-1);
+  background: var(--c-border-0);
   pointer-events: none;
 }
 

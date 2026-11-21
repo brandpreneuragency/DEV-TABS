@@ -22,7 +22,7 @@ vi.mock('../../services/db', async (importOriginal) => ({
 vi.mock('../taskManager/AddNewClientButton', () => ({ AddNewClientButton: () => <button type="button">Add brand</button> }));
 vi.mock('react-i18next', async (importOriginal) => ({
   ...await importOriginal<typeof import('react-i18next')>(),
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
 }));
 
 const brand: Client = { id: 'client-a', name: 'Northwind', color: '#123456', createdAt: 1, order: 0 };
@@ -49,6 +49,21 @@ function renderWorkspace() {
 }
 
 describe('Clients workspace scope navigation', () => {
+  it('opens the exact recent note from Everything in its owning client without starting an edit', async () => {
+    const saved = await fixture.records.saveNote({ id: 'overview-note-b', clientId: 'client-b', expectedRevision: null,
+      value: { title: 'Southridge decision', bodyText: 'Keep the launch scope focused.', kind: 'decision', occurredAt: 900, contactId: null },
+      draftId: null, generation: null, editSessionId: null });
+    expect(saved.ok).toBe(true);
+    useTaskStore.setState({ selectedClientId: null, selectedProjectId: null });
+    renderWorkspace();
+    fireEvent.click(await screen.findByRole('button', { name: 'clients.openNote' }));
+    expect(useTaskStore.getState()).toMatchObject({ selectedClientId: 'client-b', selectedProjectId: null });
+    expect(useClientDetailsStore.getState().category).toBe('notes');
+    const note = await screen.findByRole('article', { name: 'Southridge decision' });
+    await waitFor(() => expect(note).toHaveFocus());
+    expect(await fixture.database.clientDrafts.count()).toBe(0);
+  });
+
   it('shows Everything and No Client without CRM More, and selects both real scopes', () => {
     useClientDetailsStore.getState().setCategory('notes');
     render(<LeftNarrowSidebar />);

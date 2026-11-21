@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Archive } from 'lucide-react';
 import './taskList.css';
 import { useTaskStore } from '../../stores/taskStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -34,6 +35,8 @@ export function TaskListPanel() {
   const [now, setNow] = useState(() => new Date());
   const [assignedDate, setAssignedDate] = useState<string | null>(null);
   const [prefillText, setPrefillText] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [statusAnnouncement, setStatusAnnouncement] = useState('');
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(timer);
@@ -50,6 +53,10 @@ export function TaskListPanel() {
     groups.completed.sort((left, right) => right.updatedAt - left.updatedAt);
     return groups;
   }, [filteredTasks]);
+  const visibleTasks = showArchived
+    ? groupedTasks.completed
+    : [...groupedTasks.today, ...groupedTasks.thisWeek, ...groupedTasks.notYet];
+  const orderedTasks = [...groupedTasks.today, ...groupedTasks.thisWeek, ...groupedTasks.notYet, ...groupedTasks.completed];
 
   return (
     <div id="task-list-panel" className="panel flex-col h-full overflow-hidden">
@@ -57,23 +64,32 @@ export function TaskListPanel() {
         {activeTab === 'list' && (
           <div className="task-list-sticky-header">
             <div className="task-list-clock-header">
-              <time dateTime={now.toISOString()}>{clockLabel}</time>
+              {showArchived ? <span>{t('tasks.archivedTasks')}</span> : <time dateTime={now.toISOString()}>{clockLabel}</time>}
+              <button type="button" className="ui-icon-button task-list-archive-toggle"
+                aria-label={t('tasks.showArchivedTasks')} title={t('tasks.showArchivedTasks')}
+                aria-pressed={showArchived} onClick={() => setShowArchived((value) => !value)}>
+                <Archive aria-hidden="true" />
+              </button>
             </div>
           </div>
         )}
         <div id="task-list-content" className="ui-panel-body task-scope-content ai-scroll">
           <div hidden={activeTab !== 'list'}>
-            {filteredTasks.length === 0 && <p className="task-scope-empty">{t('navigation.noTasks')}</p>}
-            {(['today', 'thisWeek', 'notYet', 'completed'] as const).flatMap((category) => groupedTasks[category]).map((task) => (
-              <TaskListItem key={task.id} task={task} isActive={task.id === activeTaskId}
-                onClick={() => useTaskStore.getState().openTaskInActiveTab(task.id)} />
+            {visibleTasks.length === 0 && <p className="task-scope-empty">{t(showArchived ? 'tasks.noArchivedTasks' : 'navigation.noTasks')}</p>}
+            {orderedTasks.map((task) => (
+              <div key={task.id} hidden={(task.status === 'completed') !== showArchived}>
+                <TaskListItem task={task} isActive={task.id === activeTaskId}
+                  onStatusAnnouncement={setStatusAnnouncement}
+                  onClick={() => useTaskStore.getState().openTaskInActiveTab(task.id)} />
+              </div>
             ))}
           </div>
           <div hidden={activeTab !== 'calendar'}>
             <TaskCalendarView tasks={tasks} onPrefillText={setPrefillText} assignedDate={assignedDate} onSetDate={setAssignedDate} />
           </div>
         </div>
-        <div id="task-quick-create-footer" className="panel-footer" hidden={activeTab === 'calendar'}>
+        <span className="task-item-announcement" role="status" aria-live="polite" aria-atomic="true">{statusAnnouncement}</span>
+        <div id="task-quick-create-footer" className="panel-footer" hidden={activeTab === 'calendar' || showArchived}>
           <QuickCreateInput prefillText={prefillText} onClearPrefillText={() => setPrefillText(null)}
             assignedDate={assignedDate} onSetDate={setAssignedDate} />
         </div>

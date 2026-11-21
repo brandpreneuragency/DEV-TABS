@@ -86,7 +86,7 @@ function StyleBtn({
       onClick={onClick}
       title={title}
       className={`ui-button ui-button--compact ui-button--ghost tbar-btn${active ? ' tbar-btn--on' : ''}`}
-      style={{ fontFamily: 'var(--c-font-1)', fontSize: 'var(--fs-sm)', fontWeight: 500, paddingLeft: 0, paddingRight: 0 }}
+      style={{ fontFamily: 'var(--c-font-1)', fontSize: 'var(--fs-sm)', fontWeight: 500, paddingLeft: 0, paddingRight: 0, width: 'var(--c-sq-button)' }}
     >
       {label}
     </button>
@@ -289,7 +289,7 @@ export function SelectionToolbar({ editor, editorScrollRef }: SelectionToolbarPr
 
   if (!visible) return null;
 
-  const rawLeft = pos.x - 120;
+  const rawLeft = pos.x;
   const clampedLeft = Math.max(8, Math.min(rawLeft, window.innerWidth - 240 - 8));
   const currentAlign = (
     editor?.getAttributes('paragraph').textAlign ||
@@ -330,22 +330,8 @@ export function SelectionToolbar({ editor, editorScrollRef }: SelectionToolbarPr
           borderRadius: 'var(--radius-sm)',
         }}
       >
-      {/* Row 1: Link, Bold, Italic, Underline, Strikethrough, Bullet list, Number list */}
-      <div className="row-xs" style={{ padding: '0 6px' }}>
-        <ToolBtn
-          onClick={() => {
-            const nextOpen = !linkOpen;
-            if (nextOpen) {
-              setHref(editor?.getAttributes('link').href ?? '');
-              setColorOpen(false);
-            }
-            setLinkOpen(nextOpen);
-          }}
-          active={editor?.isActive('link') || linkOpen}
-          title="Link"
-        >
-          <Link className="ui-icon" />
-        </ToolBtn>
+      {/* Row 1: Bold, Italic, Underline, Strikethrough, Align, Bullet list, Number list */}
+      <div className="row-xs">
         <ToolBtn
           onClick={() => {
             if (!editor || !savedRange) return;
@@ -387,6 +373,13 @@ export function SelectionToolbar({ editor, editorScrollRef }: SelectionToolbarPr
           <Strikethrough className="ui-icon" />
         </ToolBtn>
         <ToolBtn
+          onClick={cycleAlign}
+          active={alignIndex > 0}
+          title={alignLabel}
+        >
+          <AlignIcon className="ui-icon" />
+        </ToolBtn>
+        <ToolBtn
           onClick={() => {
             if (!editor || !savedRange) return;
             editor.chain().focus().setTextSelection({ from: savedRange.from, to: savedRange.to }).toggleBulletList().run();
@@ -408,19 +401,12 @@ export function SelectionToolbar({ editor, editorScrollRef }: SelectionToolbarPr
         </ToolBtn>
       </div>
 
-      {/* Row 2: h1, h2, h3, p, Align, Text color, Clear formatting */}
-      <div className="row-xs" style={{ padding: '0 6px' }}>
+      {/* Row 2: h1, h2, h3, p, Text color, Clear formatting, Link */}
+      <div className="row-xs">
         <StyleBtn label="h1" title="Inline heading 1" active={activeTextPreset === INLINE_TEXT_PRESETS[0]} onClick={() => applyTextPreset('h1')} />
         <StyleBtn label="h2" title="Inline heading 2" active={activeTextPreset === INLINE_TEXT_PRESETS[1]} onClick={() => applyTextPreset('h2')} />
         <StyleBtn label="h3" title="Inline heading 3" active={activeTextPreset === INLINE_TEXT_PRESETS[2]} onClick={() => applyTextPreset('h3')} />
         <StyleBtn label="p"  title="Body text" active={!activeTextPreset} onClick={clearTextPreset} />
-        <ToolBtn
-          onClick={cycleAlign}
-          active={alignIndex > 0}
-          title={alignLabel}
-        >
-          <AlignIcon className="ui-icon" />
-        </ToolBtn>
         <ToolBtn
           onClick={() => {
             setColorOpen((v) => !v);
@@ -442,6 +428,20 @@ export function SelectionToolbar({ editor, editorScrollRef }: SelectionToolbarPr
           title="Clear formatting"
         >
           <RemoveFormatting className="ui-icon" />
+        </ToolBtn>
+        <ToolBtn
+          onClick={() => {
+            const nextOpen = !linkOpen;
+            if (nextOpen) {
+              setHref(editor?.getAttributes('link').href ?? '');
+              setColorOpen(false);
+            }
+            setLinkOpen(nextOpen);
+          }}
+          active={editor?.isActive('link') || linkOpen}
+          title="Link"
+        >
+          <Link className="ui-icon" />
         </ToolBtn>
       </div>
 

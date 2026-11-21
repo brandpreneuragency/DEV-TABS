@@ -5,6 +5,7 @@ import { notesDatabase } from '../../services/notes/database';
 import { useNotesStore } from '../../stores/notesStore';
 import { NotesPage } from './NotesPage';
 import { NotesCategoryManager } from './NotesCategoryManager';
+import { NotesNavigation } from './NotesNavigation';
 
 vi.mock('react-i18next', async (importOriginal) => ({
   ...await importOriginal<typeof import('react-i18next')>(),
@@ -27,6 +28,29 @@ async function savedNote(title = 'Ideas') {
 }
 
 describe('Notes cards', () => {
+  it('positions the category manager below its trigger and follows it on resize', () => {
+    const observer = { observe: vi.fn(), disconnect: vi.fn() };
+    vi.stubGlobal('ResizeObserver', vi.fn(function () { return observer; }));
+    try {
+      render(<NotesNavigation />);
+      const trigger = screen.getByRole('button', { name: 'notes.manageCategories' });
+      const bounds = { top: 40, bottom: 64, left: 30, right: 230, width: 200, height: 24, x: 30, y: 40, toJSON: () => ({}) };
+      vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(bounds);
+      trigger.focus();
+      fireEvent.click(trigger);
+      const dialog = screen.getByRole('dialog', { name: 'notes.addCategory' });
+      expect(dialog).toHaveStyle({ left: '30px', top: '72px' });
+      bounds.bottom = 84;
+      fireEvent.resize(window);
+      expect(dialog).toHaveStyle({ top: '92px' });
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+      expect(trigger).toHaveFocus();
+      expect(observer.disconnect).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('requires a category name and explicit color selection, then resets after saving', async () => {
     render(<NotesCategoryManager />);
     const save = screen.getByRole('button', { name: 'notes.save' });
@@ -165,6 +189,38 @@ describe('Notes cards', () => {
     fireEvent.click(screen.getByRole('button', { name: 'notes.save' }));
     await waitFor(() => expect(screen.queryByRole('textbox', { name: 'notes.noteTitle' })).toBeNull());
     expect(await notesDatabase.notes.get(id)).toMatchObject({ title: 'Updated' });
+  });
+
+  it('formats a saved note through the document editor context toolbar', async () => {
+    await savedNote();
+    render(<NotesPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'notes.edit' }));
+    const title = screen.getByRole('textbox', { name: 'notes.noteTitle' });
+    const body = screen.getByRole('textbox', { name: 'notes.noteBody' });
+    expect(screen.queryByRole('toolbar', { name: 'notes.formatting' })).toBeNull();
+    expect(fireEvent.contextMenu(title, { button: 2 })).toBe(true);
+    expect(screen.queryByTitle('Bold')).toBeNull();
+    expect(fireEvent.contextMenu(body, { button: 2 })).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'editor.selectAll' }));
+    fireEvent.click(screen.getByTitle('Bold'));
+    fireEvent.click(screen.getByTitle('Align left'));
+    fireEvent.click(screen.getByTitle('Inline heading 2'));
+    fireEvent.click(screen.getByTitle('Text color'));
+    fireEvent.click(screen.getByTitle('#dc2626'));
+    fireEvent.click(screen.getByTitle('Link'));
+    fireEvent.change(screen.getByPlaceholderText('https://...'), { target: { value: 'https://example.org' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Insert' }));
+    fireEvent.click(screen.getByRole('button', { name: 'notes.save' }));
+    await waitFor(() => expect(body).not.toBeInTheDocument());
+    expect(screen.queryByTitle('Bold')).toBeNull();
+    const preview = screen.getByRole('article').querySelector('.notes-preview')!;
+    expect(preview.querySelector('strong')).toHaveTextContent('An idea');
+    expect(preview.querySelector('p')).toHaveStyle({ textAlign: 'center' });
+    fireEvent.click(screen.getByRole('button', { name: 'notes.edit' }));
+    const reopened = screen.getByRole('textbox', { name: 'notes.noteBody' });
+    expect(reopened.querySelector('li strong')).toHaveTextContent('An idea');
+    expect(reopened.querySelector('[data-text-preset="h2"]')).toHaveStyle({ color: '#dc2626' });
+    expect(reopened.querySelector('a')).toHaveAttribute('href', 'https://example.org');
   });
 
   it('offers only pin and confirmed deletion, preserves a note when deletion is cancelled', async () => {

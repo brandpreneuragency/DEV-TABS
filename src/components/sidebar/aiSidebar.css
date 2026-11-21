@@ -7,7 +7,7 @@
 .right-panel-subheader-wrapper {
   flex: 0 0 auto;
   min-width: 0;
-  padding: var(--c-space-1);
+  padding: 0 var(--c-space-0) var(--c-space-1);
 }
 
 .chat-window-wrapper,
@@ -21,8 +21,8 @@
 }
 
 .chat-window-wrapper {
-  padding-left: var(--c-space-0);
-  padding-right: 0;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 .chat-window {
@@ -110,7 +110,7 @@
   padding-bottom: 6px;
 }
 #chat-input.composer-textarea {
-  padding-top: 14px;
+  padding: 14px;
   padding-bottom: 0;
 }
 
@@ -205,18 +205,15 @@
   content: '';
   width: 8px;
   height: 2px;
-  border-top: 1px solid var(--c-border-2);
-  border-bottom: 1px solid var(--c-border-2);
-  opacity: 0.6;
+  border-top: 1px solid var(--c-border-0);
+  border-bottom: 1px solid var(--c-border-0);
+  opacity: 1;
 }
 #chat-input-card .composer-resize-handle:hover::before {
+  border-color: var(--c-border-2);
   opacity: 1;
 }
 
-/* Remove borders on input fields when focused or populated */
-#chat-input-card:focus-within {
-  border: none;
-}
 .composer-textarea:focus,
 .composer-textarea:not(:placeholder-shown) {
   border: none;
@@ -301,7 +298,7 @@
   padding-bottom: 6px;
 }
 :root #chat-input.composer-textarea {
-  padding-top: 14px;
+  padding: 14px;
   padding-bottom: 0;
 }
 :root .chat-textarea {
@@ -355,4 +352,11 @@
   display: block;
   margin: 0 auto var(--c-space-3);
   color: var(--c-accent-1);
+}
+
+@container (max-width: 360px) {
+  :root #chat-input-card .open-code-model-select {
+    flex: 1 1 0;
+    max-width: calc(8ch + 2 * var(--c-space-1) + var(--c-icon-1) + var(--c-gap-0));
+  }
 }

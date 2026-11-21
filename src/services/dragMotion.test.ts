@@ -52,7 +52,7 @@ describe('shared native drag motion', () => {
     '<article class="notes-card" draggable="true"><span>Note</span></article>',
     '<div data-ws-tab-id="doc" draggable="true"><span>Document</span></div>',
     '<button class="scope-tab" draggable="true"><span>Project</span></button>',
-    '<div class="scope-project-heading"><span draggable="true">Client</span></div>',
+    '<div class="scope-project-heading"><button draggable="true">Client</button></div>',
     '<div data-action-row="action" draggable="true"><span>Action</span></div>',
   ])('shares the same snapshot across supported surfaces: %s', (html) => {
     document.body.innerHTML = html;

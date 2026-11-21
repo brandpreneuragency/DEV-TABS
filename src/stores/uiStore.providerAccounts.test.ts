@@ -12,7 +12,7 @@ describe('provider accounts workspace boundary', () => {
     useUIStore.getState().setActiveView('providerAccounts');
     expect(selectActiveWorkspaceMode(useUIStore.getState())).toBe('providerAccounts');
     expect(selectIsContextPanelAvailable(useUIStore.getState())).toBe(false);
-    expect(useUIStore.getState()).toMatchObject({ taskMode: false, githubMode: false, crmMode: false,
+    expect(useUIStore.getState()).toMatchObject({ taskMode: false, crmMode: false,
       primaryWrapperOpen: true, activeTaskPage: 'calendar', activeTaskId: 'task-a', sidebarTab: 'chat', assistantWrapperOpen: true });
     useUIStore.getState().setTaskMode(true);
     expect(selectActiveWorkspaceMode(useUIStore.getState())).toBe('tasks');

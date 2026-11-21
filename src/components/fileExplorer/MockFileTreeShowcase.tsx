@@ -63,6 +63,7 @@ export function MockFileTreeShowcase() {
         return (
           <li
             key={path}
+            className={isSelected ? 'mock-filetree-node is-selected' : 'mock-filetree-node'}
             data-testid={`mock-filetree-node-${path}`}
             tabIndex={0}
             onClick={() => {
@@ -80,7 +81,7 @@ export function MockFileTreeShowcase() {
             }}
             style={{
               borderRadius: 'var(--radius-sm)',
-              backgroundColor: isSelected ? 'var(--c-background-1)' : 'transparent',
+              backgroundColor: isSelected ? 'var(--c-background-1)' : undefined,
               fontSize: 'var(--fs-xs)',
               color: 'var(--c-text-1)',
               cursor: 'default',
@@ -92,7 +93,7 @@ export function MockFileTreeShowcase() {
                 height: 'var(--control-height-sm)',
                 paddingLeft: 6 + depth * 12,
                 paddingRight: 6,
-                backgroundColor: isSelected ? 'var(--c-background-1)' : 'transparent',
+                backgroundColor: isSelected ? 'var(--c-background-1)' : undefined,
                 borderRadius: '6px',
               }}
             >
@@ -113,7 +114,7 @@ export function MockFileTreeShowcase() {
               )}
               <span
                 className="trunc flex-1 min-w-0"
-                style={{ marginLeft: 4, fontWeight: 500, color: isActiveFile ? 'var(--c-text-1)' : 'var(--c-text-3)' }}
+                style={{ marginLeft: 4, fontWeight: 500, color: isActiveFile ? 'var(--c-text-1)' : 'var(--c-text-2)' }}
               >
                 {node.name}
               </span>

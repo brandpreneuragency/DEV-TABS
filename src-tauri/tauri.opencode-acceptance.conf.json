@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "TABS OpenCode Acceptance",
+  "identifier": "com.tabs.opencode.acceptance",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1421",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "windows": [{ "label": "main", "title": "TABS OpenCode Acceptance", "create": false,
+      "width": 1200, "height": 850, "center": true, "decorations": true,
+      "dragDropEnabled": false }],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost http://localhost:1421 ws://localhost:1421; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; frame-src 'none'",
+      "capabilities": [{ "identifier": "opencode-acceptance", "windows": ["main"],
+        "permissions": ["core:default"] }]
+    }
+  },
+  "plugins": { "updater": { "active": false, "endpoints": [] } },
+  "bundle": { "active": false, "createUpdaterArtifacts": false, "fileAssociations": [] }
+}

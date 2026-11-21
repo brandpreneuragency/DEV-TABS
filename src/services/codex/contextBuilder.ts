@@ -15,10 +15,9 @@ import { getTaskInstructions, getWriterInstructions } from '../instructionFiles'
 import { codexDesktopClient } from './desktopClient';
 import { decodeDataUrlBytes, decodeDataUrlText } from '../../utils/fileData';
 import { getFileCategory, isTextFile } from '../../utils/fileType';
-import { codexSessionService } from './sessionService';
-import { isGithubDocumentPath } from '../github/identity';
 import type { CodexScope } from './sessionTypes';
 import type { CodexPermissionProfile } from './types';
+import type { MemoryChatContext } from '../memoryNotes/chatContext';
 
 const MAX_CONTEXT = 64 * 1024;
 const MAX_ATTACHMENT = 32 * 1024;
@@ -31,6 +30,7 @@ export interface ScopeInput {
   workspaceId?: string;
   taskId?: string;
   settingsTab?: string;
+  memoryContext?: MemoryChatContext;
   selectedText?: string;
   selectionFrom?: number;
   selectionTo?: number;
@@ -52,9 +52,10 @@ export function boundedContext(sections: string[], limit = MAX_CONTEXT): string 
 export async function resolveScopeWorkspaceRoot(
   connectedRoot: string | undefined,
   fallbackRoot: string | undefined,
-  codexDefault: () => Promise<string>,
 ): Promise<string> {
-  return connectedRoot ?? fallbackRoot ?? codexDefault();
+  const root = connectedRoot ?? fallbackRoot;
+  if (!root) throw new Error('Connect OpenCode before capturing TABS context.');
+  return root;
 }
 
 export async function attachmentContext(attachments: Attachment[], workspaceRoot: string): Promise<string[]> {
@@ -114,12 +115,12 @@ async function sha256(text: string): Promise<string> {
 }
 
 export async function captureCodexScope(input: ScopeInput): Promise<CodexScope> {
-  const workspace = input.workspaceId
+  const workspace = input.workspaceId && !input.memoryContext
     ? useWorkspaceStore.getState().workspaces.find((row) => row.id === input.workspaceId)
     : undefined;
   const workspaceRoot = await resolveScopeWorkspaceRoot(workspace?.connectedFolders[0]?.path,
-    input.fallbackWorkspaceRoot, () => codexSessionService.defaultWorkspace());
-  if (input.permissionProfile === 'workspaceWrite' && !workspace?.connectedFolders[0]?.path) {
+    input.fallbackWorkspaceRoot);
+  if (!input.memoryContext && input.permissionProfile === 'workspaceWrite' && !workspace?.connectedFolders[0]?.path) {
     throw new Error('Connect a workspace folder before enabling Codex file edits');
   }
   const ai = useAIStore.getState();
@@ -127,12 +128,13 @@ export async function captureCodexScope(input: ScopeInput): Promise<CodexScope> 
   const sections: string[] = [];
   if (agent.systemPrompt.trim()) sections.push(`[PERSONA]\n${agent.systemPrompt.trim()}`);
   if (ai.systemInstructions.trim()) sections.push(`[TABS INSTRUCTIONS]\n${ai.systemInstructions.trim()}`);
-  const fileInstructions = input.mode === 'task' ? await getTaskInstructions() : await getWriterInstructions();
+  const fileInstructions = input.memoryContext ? null
+    : input.mode === 'task' ? await getTaskInstructions() : await getWriterInstructions();
   if (fileInstructions?.trim()) sections.push(`[WORKSPACE INSTRUCTIONS]\n${fileInstructions.trim()}`);
-  if (input.selectedText) sections.push(`[SELECTED TEXT ${input.selectionFrom ?? '?'}..${input.selectionTo ?? '?'}]\n${input.selectedText}`);
+  if (input.selectedText && !input.memoryContext) sections.push(`[SELECTED TEXT ${input.selectionFrom ?? '?'}..${input.selectionTo ?? '?'}]\n${input.selectedText}`);
 
   let document: CodexScope['document'];
-  if (workspace?.currentFile && !isGithubDocumentPath(workspace.currentFile.path)) {
+  if (workspace?.currentFile) {
     const file = workspace.currentFile;
     const content = input.editor && !input.editor.isDestroyed
       ? JSON.stringify(input.editor.getJSON()) : file.content;
@@ -145,7 +147,7 @@ export async function captureCodexScope(input: ScopeInput): Promise<CodexScope> 
     sections.push(`[ACTIVE DOCUMENT ${file.name}; path=${file.path}; unsaved=${document.isDirty}; sha256=${document.contentHash}]\n${document.content}`);
     if (content.length > MAX_CONTEXT) sections.push('[ACTIVE DOCUMENT CONTENT TRUNCATED]');
   }
-  if (input.taskId) {
+  if (input.taskId && !input.memoryContext) {
     const task = useTaskStore.getState().tasks.find((row) => row.id === input.taskId && !row.deletedAt);
     if (task) {
       await useTaskCommentStore.getState().loadComments(task.id);
@@ -163,30 +165,33 @@ export async function captureCodexScope(input: ScopeInput): Promise<CodexScope> 
       if (project) sections.push(`[PROJECT]\n${project.name} (id=${project.id}, client=${project.clientId})`);
     }
   }
-  if (input.settingsTab) sections.push(buildSettingsAIContext(input.settingsTab as SettingsSubTab));
+  if (input.settingsTab && !input.memoryContext) sections.push(buildSettingsAIContext(input.settingsTab as SettingsSubTab));
   if (input.attachments?.length) sections.push(...await attachmentContext(input.attachments, workspaceRoot));
   return {
     appThreadId: input.appThreadId, mode: input.mode,
-    workspaceId: input.workspaceId, taskId: input.taskId, settingsTab: input.settingsTab,
-    projectId: (input.taskId && !input.taskId.includes(':')
+    workspaceId: input.memoryContext ? undefined : input.workspaceId,
+    taskId: input.memoryContext ? undefined : input.taskId,
+    settingsTab: input.memoryContext ? undefined : input.settingsTab,
+    projectId: input.memoryContext ? undefined : (input.taskId && !input.taskId.includes(':')
       ? useTaskStore.getState().tasks.find((row) => row.id === input.taskId)?.projectId
       : undefined) ?? useTaskStore.getState().selectedProjectId ?? undefined,
-    clientId: useTaskStore.getState().selectedClientId ?? undefined,
-    crmSelection: {
+    clientId: input.memoryContext ? undefined : useTaskStore.getState().selectedClientId ?? undefined,
+    crmSelection: input.memoryContext ? undefined : {
       leadId: useCrmStore.getState().activeLeadId ?? undefined,
       contactId: useCrmStore.getState().activeContactId ?? undefined,
       companyId: useCrmStore.getState().activeCompanyId ?? undefined,
       dealId: useCrmStore.getState().activeDealId ?? undefined,
     },
-    formsSelection: {
+    formsSelection: input.memoryContext ? undefined : {
       formId: useFormsStore.getState().activeFormId ?? undefined,
       submissionId: useFormsStore.getState().activeSubmissionId ?? undefined,
     },
     workspaceRoot, hasConnectedFolder: Boolean(workspace?.connectedFolders[0]?.path),
-    permissionProfile: input.permissionProfile ?? 'readOnly', model: input.model, effort: input.effort,
+    permissionProfile: input.memoryContext ? 'readOnly' : input.permissionProfile ?? 'readOnly', model: input.model, effort: input.effort,
     agentId: agent.id, context: boundedContext(sections),
-    selectedText: input.selectedText, selectionFrom: input.selectionFrom,
-    selectionTo: input.selectionTo, attachments: input.attachments,
+    selectedText: input.memoryContext ? undefined : input.selectedText,
+    selectionFrom: input.memoryContext ? undefined : input.selectionFrom,
+    selectionTo: input.memoryContext ? undefined : input.selectionTo, attachments: input.attachments,
     document, capturedAt: Date.now(),
   };
 }

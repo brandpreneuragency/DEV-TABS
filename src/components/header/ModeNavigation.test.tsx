@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUIStore } from '../../stores/uiStore';
 import { useTaskStore } from '../../stores/taskStore';
+import { useMemoryNavigationStore } from '../../stores/memoryNavigationStore';
 import { ModeNavigation } from './ModeNavigation';
 
 vi.mock('../../services/db', () => ({
@@ -18,31 +19,52 @@ vi.mock('react-i18next', async (importOriginal) => ({
 beforeEach(() => {
   useUIStore.setState(useUIStore.getInitialState());
   useTaskStore.setState(useTaskStore.getInitialState());
+  useMemoryNavigationStore.setState(useMemoryNavigationStore.getInitialState());
 });
 afterEach(cleanup);
 
 describe('ModeNavigation', () => {
+  it.each(['navigation.docs', 'navigation.taskList', 'navigation.calendar', 'navigation.clients', 'navigation.projects', 'navigation.notes', 'navigation.memory', 'scripts.title', 'menu.settings'])(
+    'opens Accounts independently from %s', (destination) => {
+      render(<ModeNavigation />);
+      fireEvent.click(screen.getByRole('button', { name: destination }));
+      fireEvent.click(screen.getByRole('button', { name: 'navigation.providerAccounts' }));
+
+      expect(useUIStore.getState()).toMatchObject({ activeView: 'providerAccounts', taskMode: false, crmMode: false });
+      expect(screen.getByRole('button', { name: 'navigation.providerAccounts' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: 'navigation.memory' })).toHaveAttribute('aria-pressed', 'false');
+      fireEvent.click(screen.getByRole('button', { name: 'navigation.memory' }));
+      expect(useUIStore.getState().activeView).toBe('memory');
+      expect(screen.getByRole('button', { name: 'navigation.memory' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: 'navigation.providerAccounts' })).toHaveAttribute('aria-pressed', 'false');
+    });
+
+  it.each(['notes', 'resources', 'toRead', 'someday'] as const)(
+    'restores the selected Memory collection %s after visiting Accounts', (page) => {
+      useMemoryNavigationStore.getState().setPage(page);
+      useUIStore.getState().setActiveView('memory');
+      render(<ModeNavigation />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'navigation.providerAccounts' }));
+      fireEvent.click(screen.getByRole('button', { name: 'navigation.memory' }));
+
+      expect(useUIStore.getState().activeView).toBe('memory');
+      expect(useMemoryNavigationStore.getState().page).toBe(page);
+    });
+
   it('keeps all controls visible in the requested order across view changes', () => {
     render(<ModeNavigation />);
-    const expected = ['left-navbar', 'settings', 'terminal', 'documents', 'github', 'tasks', 'calendar', 'projects', 'notes', 'clients', 'provider-accounts'];
-    for (const name of ['navigation.calendar', 'navigation.notes', 'navigation.projects', 'navigation.taskList', 'navigation.docs', 'navigation.github', 'navigation.clients', 'navigation.providerAccounts']) {
+    const expected = ['left-navbar', 'settings', 'terminal', 'documents', 'tasks', 'calendar', 'notes', 'memory', 'provider-accounts', 'scripts', 'clients', 'projects'];
+    expect(Array.from(document.querySelector('.mode-navigation')!.children)
+      .filter((element) => element.classList.contains('header-mode') || element.classList.contains('mode-navigation-separator'))
+      .map((element) => element.classList.contains('mode-navigation-separator') ? '|' : element.id))
+      .toEqual(['|', 'nav-btn-documents', 'nav-btn-tasks', 'nav-btn-calendar', '|', 'nav-btn-notes', 'nav-btn-memory', 'nav-btn-provider-accounts', 'nav-btn-scripts', '|', 'nav-btn-clients', 'nav-btn-projects']);
+    for (const name of ['navigation.calendar', 'scripts.title', 'navigation.memory', 'navigation.providerAccounts', 'navigation.notes', 'navigation.projects', 'navigation.memory', 'navigation.taskList', 'navigation.memory', 'navigation.docs', 'navigation.clients']) {
       fireEvent.click(screen.getByRole('button', { name }));
       expect(screen.getAllByRole('button').map((button) => button.id)).toEqual(expected.map((id) => `nav-btn-${id}`));
       expect(screen.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
       expect(document.querySelectorAll('.header-mode[aria-pressed="true"]')).toHaveLength(1);
     }
-    expect(useUIStore.getState().githubMode).toBe(false);
-  });
-
-  it('enters GitHub as a separate workspace and keeps the other mode flags off', () => {
-    useUIStore.setState({ taskMode: true, crmMode: false, activeView: 'document' });
-    render(<ModeNavigation />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'navigation.github' }));
-
-    expect(useUIStore.getState()).toMatchObject({ githubMode: true, taskMode: false, crmMode: false });
-    expect(screen.getByRole('button', { name: 'navigation.github' })).toHaveAttribute('aria-pressed', 'true');
-    expect(document.querySelectorAll('.header-mode[aria-pressed="true"]')).toHaveLength(1);
   });
 
   it('enters Clients without changing the selected client and clears project scope', () => {

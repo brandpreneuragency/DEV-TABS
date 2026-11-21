@@ -65,7 +65,7 @@ export function TaskClientProjectControls() {
           </span>
         </button>
         {showProjectPicker && activeTask && (
-          <div className="drop" style={{ position: 'absolute', top: '100%', left: 0, minWidth: 192, marginTop: 0, zIndex: 1000 }}>
+          <div className="drop" style={{ position: 'absolute', top: '100%', left: 0, minWidth: 192, marginTop: 0, marginLeft: 'var(--task-project-picker-offset)', zIndex: 1000 }}>
             {clientProjects.map((p) => (
               <button
                 key={p.id}

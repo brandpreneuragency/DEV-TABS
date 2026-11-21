@@ -4,11 +4,16 @@ export const INLINE_TEXT_PRESETS = ['h1', 'h2', 'h3'] as const;
 
 export type InlineTextPresetName = (typeof INLINE_TEXT_PRESETS)[number];
 
-const INLINE_PRESET_STYLES: Record<InlineTextPresetName, string> = {
-  h1: 'font-size: var(--inline-preset-h1-size); font-weight: 700; line-height: 1.2;',
-  h2: 'font-size: var(--inline-preset-h2-size); font-weight: 600; line-height: 1.3;',
-  h3: 'font-size: var(--inline-preset-h3-size); font-weight: 600; line-height: 1.35;',
+const INLINE_PRESET_STYLES = {
+  h1: { fontSize: 'var(--inline-preset-h1-size)', fontWeight: 700, lineHeight: 1.2 },
+  h2: { fontSize: 'var(--inline-preset-h2-size)', fontWeight: 600, lineHeight: 1.3 },
+  h3: { fontSize: 'var(--inline-preset-h3-size)', fontWeight: 600, lineHeight: 1.35 },
 };
+
+export function getInlineTextPresetStyle(value: unknown) {
+  const preset = INLINE_TEXT_PRESETS.find(name => name === value);
+  return preset && INLINE_PRESET_STYLES[preset];
+}
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -38,20 +43,19 @@ export const InlineTextPreset = Extension.create({
             parseHTML: element => {
               const value = element.getAttribute('data-text-preset');
 
-              return value && INLINE_TEXT_PRESETS.includes(value as InlineTextPresetName)
-                ? value
-                : null;
+              return getInlineTextPresetStyle(value) ? value : null;
             },
             renderHTML: attributes => {
-              const preset = attributes.textPreset as InlineTextPresetName | null | undefined;
+              const preset = attributes.textPreset;
+              const style = getInlineTextPresetStyle(preset);
 
-              if (!preset || !INLINE_TEXT_PRESETS.includes(preset)) {
+              if (!style) {
                 return {};
               }
 
               return {
                 'data-text-preset': preset,
-                style: INLINE_PRESET_STYLES[preset],
+                style: `font-size: ${style.fontSize}; font-weight: ${style.fontWeight}; line-height: ${style.lineHeight};`,
               };
             },
           },

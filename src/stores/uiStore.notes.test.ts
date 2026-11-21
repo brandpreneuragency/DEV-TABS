@@ -11,18 +11,17 @@ describe('Notes workspace routing', () => {
     expect(selectActiveWorkspaceMode(useUIStore.getState())).toBe('notes');
     expect(selectIsContextPanelAvailable(useUIStore.getState())).toBe(false);
     expect(useUIStore.getState()).toMatchObject({
-      taskMode: false, githubMode: false, crmMode: false, activeTaskPage: 'calendar', primaryWrapperOpen: true,
+      taskMode: false, crmMode: false, activeTaskPage: 'calendar', primaryWrapperOpen: true,
     });
     useUIStore.getState().setTaskMode(true);
     expect(selectActiveWorkspaceMode(useUIStore.getState())).toBe('tasks');
     expect(useUIStore.getState().activeTaskPage).toBe('calendar');
   });
 
-  it('leaves Notes for documents, settings and GitHub', () => {
+  it('leaves Notes for documents and settings', () => {
     for (const enter of [
       () => useUIStore.getState().setActiveView('document'),
       () => useUIStore.getState().openSettings(),
-      () => useUIStore.getState().setGithubMode(true),
     ]) {
       useUIStore.getState().setActiveView('notes');
       enter();

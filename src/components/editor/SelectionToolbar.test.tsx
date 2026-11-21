@@ -81,4 +81,12 @@ describe('SelectionToolbar activation', () => {
       'Paste',
     ]);
   });
+
+  it('places alignment fifth in the first row and link last in the second', () => {
+    fireEvent.contextMenu(setup(), { button: 2 });
+
+    const rows = document.querySelectorAll('.selection-toolbar > .row-xs');
+    expect(rows[0].querySelectorAll('button')[4].title).toBe('Align left');
+    expect(Array.from(rows[1].querySelectorAll('button')).at(-1)?.title).toBe('Link');
+  });
 });

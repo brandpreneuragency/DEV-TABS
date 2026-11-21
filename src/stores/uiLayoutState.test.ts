@@ -68,14 +68,30 @@ describe('selectCanSwapWrappers', () => {
 });
 
 describe('selectActiveWorkspaceMode', () => {
-  it('resolves GitHub as its own mode ahead of other workspace flags', () => {
-    expect(selectActiveWorkspaceMode({
+  it('routes Memory separately without a context panel even when its stored flag is open', () => {
+    const state = { taskMode: false, crmMode: false, activeCRMPage: 'clients', activeView: 'memory', activeTaskPage: 'list' };
+    const layout = migrateLayoutStateFromStored({ contextPanelOpenByMode: JSON.stringify({ memory: true, notes: false, documents: true }) });
+    expect(selectActiveWorkspaceMode(state)).toBe('memory');
+    expect(selectIsContextPanelAvailable({ ...state, ...layout })).toBe(false);
+    expect(layout.contextPanelOpenByMode.memory).toBe(true);
+    expect(layout.contextPanelOpenByMode.notes).toBe(false);
+    expect(migrateLayoutStateFromStored({}).contextPanelOpenByMode.memory).toBe(false);
+  });
+
+  it('ignores a retired workspace flag when resolving the active mode', () => {
+    const legacyState = {
       githubMode: true,
       taskMode: true,
       crmMode: true,
       activeCRMPage: 'forms',
       activeView: 'settings',
-    })).toBe('github');
+    };
+    expect(selectActiveWorkspaceMode(legacyState)).toBe('tasks');
+    const layout = migrateLayoutStateFromStored({
+      contextPanelOpenByMode: JSON.stringify({ github: true, documents: true, tasks: false }),
+    });
+    expect(layout.contextPanelOpenByMode).toMatchObject({ documents: true, tasks: false });
+    expect(layout.contextPanelOpenByMode).not.toHaveProperty('github');
   });
 
   it('resolves tasks over documents', () => {

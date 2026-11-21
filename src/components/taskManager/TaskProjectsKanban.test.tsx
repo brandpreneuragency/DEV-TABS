@@ -5,6 +5,7 @@ import type { Task } from '../../types';
 import { TaskKanbanCard, TaskProjectsKanban } from './TaskProjectsKanban';
 
 const createProject = vi.fn();
+const deleteProject = vi.fn();
 const createClient = vi.fn();
 const showToast = vi.fn();
 const updateProject = vi.fn();
@@ -81,9 +82,10 @@ vi.mock('../../stores/projectStore', () => ({
   useProjectStore: (selector?: (s: {
     projects: typeof projects;
     createProject: typeof createProject;
+    deleteProject: typeof deleteProject;
     updateProject: typeof updateProject;
   }) => unknown) => {
-    const state = { projects, createProject, updateProject };
+    const state = { projects, createProject, deleteProject, updateProject };
     return selector ? selector(state) : state;
   },
 }));
@@ -107,6 +109,7 @@ describe('TaskProjectsKanban', () => {
     setSelection.mockImplementation((clientId: string | null) => { selectedClientId = clientId; });
     updateProject.mockReset();
     createProject.mockReset();
+    deleteProject.mockReset();
     createTask.mockReset();
     updateTask.mockReset();
     updateTask.mockResolvedValue(undefined);
@@ -128,9 +131,9 @@ describe('TaskProjectsKanban', () => {
     expect(within(column).getByRole('button', { name: 'tasks.actions' })).toBeInTheDocument();
     fireEvent.click(within(column).getByText('General task'));
     expect(openTaskInActiveTab).toHaveBeenCalledWith('t1');
-    expect(setActiveTaskPage).toHaveBeenCalledWith('list');
-    expect(setTaskMode).toHaveBeenCalledWith(true);
-    expect(setContextPanelOpen).toHaveBeenCalledWith('tasks', true);
+    expect(setActiveTaskPage).not.toHaveBeenCalled();
+    expect(setTaskMode).not.toHaveBeenCalled();
+    expect(setContextPanelOpen).not.toHaveBeenCalled();
   });
 
   it('places every project in one board and identifies its client', () => {
@@ -169,6 +172,30 @@ describe('TaskProjectsKanban', () => {
     await user.click(screen.getByRole('button', { name: 'tasks.addClient' }));
     expect(createClient).toHaveBeenCalledWith('New client');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('confirms project deletion and allows cancellation', async () => {
+    const user = userEvent.setup();
+    render(<TaskProjectsKanban />);
+    const column = screen.getByRole('region', { name: 'Client One / Website' });
+    await user.click(within(column).getByRole('button', { name: 'tasks.projectActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'tasks.deleteProject' }));
+    expect(screen.getByText('tasks.deleteProjectConfirm')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'confirm.cancel' }));
+    expect(deleteProject).not.toHaveBeenCalled();
+    await user.click(within(column).getByRole('button', { name: 'tasks.projectActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'tasks.deleteProject' }));
+    await user.click(screen.getByRole('button', { name: 'explorer.delete' }));
+    expect(deleteProject).toHaveBeenCalledWith('p-web');
+  });
+
+  it('warns about deleting General project tasks', async () => {
+    const user = userEvent.setup();
+    render(<TaskProjectsKanban />);
+    const column = screen.getByRole('region', { name: 'Client One / General' });
+    await user.click(within(column).getByRole('button', { name: 'tasks.projectActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'tasks.deleteProject' }));
+    expect(screen.getByText('tasks.deleteGeneralProjectConfirm')).toBeInTheDocument();
   });
 
   it('replaces the inline creation form when switching between client and project', async () => {
@@ -428,21 +455,23 @@ describe('TaskProjectsKanban', () => {
     expect(document.querySelector('.kanban-drop-indicator')).toBeNull();
   });
 
-  it('uses the task list top row with client, project and date', () => {
+  it('uses the compact card top row with client and project, without date controls', () => {
     render(<TaskKanbanCard task={tasks[0]} isActive={false} onClick={openTaskInActiveTab} />);
     const top = screen.getByText('General task').closest('[role="button"]')!.querySelector('.task-kanban-card-top')!;
     expect(top).toHaveClass('row-xs');
     expect(within(top as HTMLElement).getByText('Client One')).toBeInTheDocument();
     expect(within(top as HTMLElement).getByText('General')).toBeInTheDocument();
-    expect(within(top as HTMLElement).getByText('11.Eyl')).toBeInTheDocument();
+    expect(within(top as HTMLElement).queryByText('11.Eyl')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'tasks.dueDateCalendar' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     expect(top.querySelector('button, .crm-kanban-card-drag')).toBeNull();
   });
 
   it.each([
+    tasks[0],
     { ...tasks[0], date: '' },
     { ...tasks[0], status: 'completed' as const },
-  ])('hides the date for undated or completed cards', (task) => {
+  ])('keeps compact dated, undated and completed cards keyboard-accessible', (task) => {
     render(<TaskKanbanCard task={task} isActive={false} onClick={openTaskInActiveTab} />);
     expect(screen.queryByText('11.Eyl')).not.toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole('button'), { key: 'Enter' });

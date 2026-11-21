@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountConnections, accountIsStale, remainingPercent, usageWindow } from './model';
+import { accountConnections, accountIsStale, billingResetTime, remainingPercent, usageWindow } from './model';
 import type { ConsumerObservation, ProviderAccount } from './types';
 
 const account: ProviderAccount = {
@@ -10,6 +10,17 @@ const account: ProviderAccount = {
 };
 
 describe('provider account presentation rules', () => {
+  it('never substitutes a scoped Fable week when the all-model week is missing', () => {
+    const usage = { windows: [{ id: 'weeklyFable', windowMinutes: 10080, usedPercent: 20, resetsAt: 9000 }], resetTokens: null };
+    expect(usageWindow(usage, 10080)).toBeNull();
+    expect(usageWindow(usage, 10080, 'weeklyFable')?.usedPercent).toBe(20);
+  });
+  it('keeps missing or invalid provider reset timestamps unknown', () => {
+    expect(billingResetTime(null)).toBeNull();
+    expect(billingResetTime('not-a-date')).toBeNull();
+    expect(billingResetTime('2026-06-08T00:00:00Z')).toBe(Date.UTC(2026, 5, 8));
+  });
+
   it('keeps unavailable and invalid percentages unknown rather than reporting full quota', () => {
     expect(remainingPercent(null)).toBeNull();
     expect(remainingPercent(Number.NaN)).toBeNull();

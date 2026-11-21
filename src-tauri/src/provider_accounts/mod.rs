@@ -3,8 +3,14 @@
 //! No Tauri managed state is required: a process-local registry is keyed by the
 //! canonical app data directory. Parent must expose codex::discovery pub(crate);
 //! codex::CliOwnedJob is the existing process-tree ownership re-export.
+mod auth_storage;
 mod browser;
+mod claude;
 mod client;
+mod external;
+mod external_cli;
+mod grok;
+mod inception;
 mod model;
 mod storage;
 
@@ -32,6 +38,8 @@ pub struct LoginStart {
     pub account_id: String,
     pub login_id: String,
     pub auth_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flow: Option<&'static str>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -285,6 +293,7 @@ impl Store {
                 account_id: id.into(),
                 login_id,
                 auth_url,
+                flow: None,
             })
         })();
         if let Err(e) = &attempt {
@@ -407,14 +416,18 @@ impl Store {
     }
 }
 
-fn store_for(app: &AppHandle) -> Result<Arc<Store>> {
+fn provider_root(app: &AppHandle, provider: &str) -> Result<PathBuf> {
     let base = app
         .path()
         .app_data_dir()
         .map_err(|_| "Application data directory is unavailable")?;
     storage::reject_link(&base)?;
     std::fs::create_dir_all(&base).map_err(|_| "Could not create application data directory")?;
-    let root = storage::directory(&storage::directory(&base, "provider-accounts")?, "codex")?;
+    storage::directory(&storage::directory(&base, "provider-accounts")?, provider)
+}
+
+fn store_for(app: &AppHandle) -> Result<Arc<Store>> {
+    let root = provider_root(app, "codex")?;
     let mut registry = STORES
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock()
@@ -434,7 +447,12 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'sta
 }
 
 fn require_main(window: &WebviewWindow) -> Result<()> {
-    if window.label() == "main" {
+    require_account_window(window.label(), false)
+}
+
+// The tray can observe/refresh sanitized metadata, never start or manage a login.
+fn require_account_window(label: &str, monitor: bool) -> Result<()> {
+    if label == "main" || (monitor && label == "accounts-tray") {
         Ok(())
     } else {
         Err("Provider accounts require the main TABS window".into())
@@ -446,8 +464,14 @@ pub async fn provider_accounts_list(
     app: AppHandle,
     window: WebviewWindow,
 ) -> Result<Vec<ProviderAccount>> {
-    require_main(&window)?;
-    blocking(move || store_for(&app)?.list()).await
+    require_account_window(window.label(), true)?;
+    blocking(move || {
+        let mut accounts = store_for(&app)?.list()?;
+        accounts.extend(external::list(&app));
+        accounts.push(inception::list(&app));
+        Ok(accounts)
+    })
+    .await
 }
 #[tauri::command]
 pub async fn provider_accounts_refresh(
@@ -455,9 +479,34 @@ pub async fn provider_accounts_refresh(
     window: WebviewWindow,
     account_id: Option<String>,
 ) -> Result<Vec<ProviderAccount>> {
-    require_main(&window)?;
-    blocking(move || store_for(&app)?.refresh(account_id.as_deref())).await
+    require_account_window(window.label(), true)?;
+    blocking(move || {
+        if account_id.as_deref().is_some_and(inception::is_account) {
+            return inception::refresh(&app);
+        }
+        if account_id.as_deref().is_some_and(external::is_account) {
+            return external::refresh(&app, account_id.as_deref());
+        }
+        let mut accounts = store_for(&app)?.refresh(account_id.as_deref())?;
+        if account_id.is_none() {
+            accounts.extend(external::refresh(&app, None)?);
+            accounts.extend(inception::refresh(&app)?);
+        }
+        Ok(accounts)
+    })
+    .await
 }
+#[tauri::command]
+pub async fn provider_accounts_connect_api_key(
+    app: AppHandle,
+    window: WebviewWindow,
+    account_id: String,
+    api_key: String,
+) -> Result<ProviderAccount> {
+    require_main(&window)?;
+    blocking(move || inception::connect(&app, &account_id, api_key)).await
+}
+
 #[tauri::command]
 pub async fn provider_accounts_begin_login(
     app: AppHandle,
@@ -465,7 +514,14 @@ pub async fn provider_accounts_begin_login(
     account_id: String,
 ) -> Result<LoginStart> {
     require_main(&window)?;
-    blocking(move || store_for(&app)?.begin(&account_id)).await
+    blocking(move || {
+        if external::is_account(&account_id) {
+            external::begin(&app, &account_id)
+        } else {
+            store_for(&app)?.begin(&account_id)
+        }
+    })
+    .await
 }
 #[tauri::command]
 pub async fn provider_accounts_poll_login(
@@ -475,7 +531,14 @@ pub async fn provider_accounts_poll_login(
     login_id: String,
 ) -> Result<LoginPoll> {
     require_main(&window)?;
-    blocking(move || store_for(&app)?.poll(&account_id, &login_id)).await
+    blocking(move || {
+        if external::is_account(&account_id) {
+            external::poll(&app, &account_id, &login_id)
+        } else {
+            store_for(&app)?.poll(&account_id, &login_id)
+        }
+    })
+    .await
 }
 #[tauri::command]
 pub async fn provider_accounts_cancel_login(
@@ -485,7 +548,14 @@ pub async fn provider_accounts_cancel_login(
     login_id: String,
 ) -> Result<()> {
     require_main(&window)?;
-    blocking(move || store_for(&app)?.cancel(&account_id, &login_id)).await
+    blocking(move || {
+        if external::is_account(&account_id) {
+            external::cancel(&app, &account_id, &login_id)
+        } else {
+            store_for(&app)?.cancel(&account_id, &login_id)
+        }
+    })
+    .await
 }
 
 #[tauri::command]
@@ -499,9 +569,26 @@ pub async fn provider_accounts_open_login(
     blocking(move || browser::open(&store_for(&app)?.login_url(&account_id, &login_id)?)).await
 }
 
+#[tauri::command]
+pub async fn provider_accounts_open_usage(window: WebviewWindow, account_id: String) -> Result<()> {
+    require_main(&window)?;
+    blocking(move || browser::open_usage(&account_id)).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn tray_can_only_observe_accounts_not_manage_authentication() {
+        assert!(require_account_window("main", true).is_ok());
+        assert!(require_account_window("main", false).is_ok());
+        assert!(require_account_window("accounts-tray", true).is_ok());
+        assert!(require_account_window("accounts-tray", false).is_err());
+        for label in ["", "accounts-tray-extra", "other"] {
+            assert!(require_account_window(label, true).is_err());
+            assert!(require_account_window(label, false).is_err());
+        }
+    }
     fn fixture() -> (tempfile::TempDir, Store) {
         let dir = tempfile::Builder::new()
             .prefix("tabs-provider-store-")

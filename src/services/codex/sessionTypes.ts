@@ -1,5 +1,4 @@
 import type { Attachment, Task } from '../../types';
-import type { GithubDispatchContext } from '../github/aiEgress';
 import type { CodexHostEvent, CodexPendingRequest, CodexPermissionProfile } from './types';
 
 export type CodexRunStatus =
@@ -29,8 +28,6 @@ export interface CodexScope {
   selectionFrom?: number;
   selectionTo?: number;
   attachments?: Attachment[];
-  /** Isolated GitHub request context; never inferred from a Docs workspace. */
-  github?: GithubDispatchContext;
   document?: {
     path: string;
     name: string;
@@ -52,8 +49,6 @@ export interface CodexSessionRecord {
   toolSchemaVersion: number;
   toolNames?: string[];
   permissionProfile?: CodexPermissionProfile;
-  /** Persisted GitHub workspace this native session may resume. Absent sessions are not reused for GitHub. */
-  githubWorkspaceId?: string;
   model?: string;
   effort?: string;
   createdAt: number;

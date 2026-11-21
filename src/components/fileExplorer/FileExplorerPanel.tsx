@@ -349,7 +349,7 @@ export function FileExplorerPanel() {
       {/* Body */}
       <div
         className={`panel-body ai-scroll flex-1 overflow-y-a${treeDragging ? ' filetree-dragging' : ''}`}
-        style={{ minHeight: 0, padding: '0 var(--c-space-1)' }}
+        style={{ minHeight: 0, padding: '0 var(--c-space-0)' }}
         onDragStartCapture={(event) => {
           if (event.target instanceof Element && event.target.closest('[data-tree-node]')) {
             setTreeDragging(true);

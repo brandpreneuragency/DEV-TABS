@@ -1,18 +1,51 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 /** Notes-local accessible overlay, using the app's existing confirmation surfaces. */
-export function NotesDialog({ title, children, onClose, alert = false }: {
-  title: string; children: ReactNode; onClose: () => void; alert?: boolean;
+export function NotesDialog({ title, children, onClose, alert = false, anchorRef, placement = 'bottom' }: {
+  title: string; children: ReactNode; onClose: () => void; alert?: boolean; anchorRef?: RefObject<HTMLElement | null>;
+  placement?: 'top' | 'bottom';
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!anchorRef) return;
+    const reposition = () => {
+      const anchor = anchorRef.current;
+      const dialog = ref.current;
+      if (!anchor || !dialog) return;
+      const bounds = anchor.getBoundingClientRect();
+      const size = dialog.getBoundingClientRect();
+      const left = Math.max(8, Math.min(bounds.left, window.innerWidth - size.width - 8));
+      const below = bounds.bottom + 8;
+      const above = bounds.top - size.height - 8;
+      const preferred = placement === 'top'
+        ? (above >= 8 ? above : below)
+        : (below + size.height <= window.innerHeight - 8 ? below : above);
+      const top = Math.max(8, Math.min(
+        preferred,
+        window.innerHeight - size.height - 8,
+      ));
+      dialog.style.left = `${left}px`;
+      dialog.style.top = `${top}px`;
+    };
+    reposition();
+    const observer = new ResizeObserver(reposition);
+    if (ref.current) observer.observe(ref.current);
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
+  }, [anchorRef, placement]);
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     ref.current?.querySelector<HTMLElement>('[data-autofocus], button, input')?.focus();
     return () => { if (previous?.isConnected) previous.focus(); };
   }, []);
-  return createPortal(<div className="confirm-overlay notes-dialog-overlay" onMouseDown={(event) => {
+  return createPortal(<div className={`confirm-overlay notes-dialog-overlay${anchorRef ? ' notes-dialog-overlay--anchored' : ''}`} onMouseDown={(event) => {
     if (event.target === event.currentTarget) onClose();
   }}>
     <div ref={ref} className="ui-panel-body confirm-box notes-dialog" role={alert ? 'alertdialog' : 'dialog'}
@@ -32,14 +65,15 @@ export function NotesDialog({ title, children, onClose, alert = false }: {
   </div>, document.body);
 }
 
-export function NotesConfirmation({ title, message, confirmLabel, onConfirm, onClose }: {
+export function NotesConfirmation({ title, message, confirmLabel, onConfirm, onClose, anchorRef }: {
   title: string; message: string; confirmLabel: string; onConfirm: () => Promise<void>; onClose: () => void;
+  anchorRef?: RefObject<HTMLElement | null>;
 }) {
   const { t } = useTranslation();
   const busy = useRef(false);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
-  return <NotesDialog title={title} onClose={() => { if (!busy.current) onClose(); }} alert>
+  return <NotesDialog title={title} onClose={() => { if (!busy.current) onClose(); }} alert anchorRef={anchorRef} placement="top">
     <p>{message}</p>
     {failed && <p role="alert" className="notes-danger">{t('notes.error_storage')}</p>}
     <div className="notes-dialog-actions">

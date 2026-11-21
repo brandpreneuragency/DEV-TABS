@@ -60,7 +60,7 @@ export function ConfirmDialog({ message, onConfirm, onCancel, onSave, confirmLab
             type="button"
             onClick={onConfirm}
             className="ui-button btn-xs semibold"
-            style={{ background: 'var(--c-background-3)', color: 'var(--c-text-1)', border: 'none' }}
+            style={{ background: 'var(--c-red)', color: 'var(--c-text-1)', border: 'none' }}
           >
             {resolvedConfirmLabel}
           </button>

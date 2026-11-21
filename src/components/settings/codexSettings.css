@@ -103,6 +103,21 @@
   flex-wrap: wrap;
 }
 
+.codex-provider-detail--open-code .codex-provider-header {
+  min-height: var(--control-height-sm);
+  margin-bottom: var(--radius-sm);
+  padding: 0 var(--c-gap-1) 0 var(--c-space-1);
+  border: var(--border-width) solid var(--c-border-1);
+  border-radius: var(--radius-sm);
+  background-color: var(--c-background-3);
+}
+
+.codex-provider-detail--open-code .codex-status-badge {
+  height: var(--c-sq-button);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .codex-provider-header__icon {
   width: var(--control-height-sm);
   height: var(--control-height-sm);

@@ -20,9 +20,11 @@ import { useUIStore } from '../../stores/uiStore';
 import type { Task } from '../../types';
 import { useKanbanDropIndicator } from '../../hooks/useKanbanDropIndicator';
 import { sortKanbanCards } from '../../services/kanbanOrder';
-import { NAME_MAX } from '../../stores/taskTreeNames';
+import { NAME_MAX, nameKey } from '../../stores/taskTreeNames';
 import { resolveCreateProjectName } from './createProjectName';
 import { TaskQuickCreate } from './TaskQuickCreate';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { ProjectContinuity } from './ProjectContinuity';
 import './taskList.css';
 
 interface TaskKanbanCardProps {
@@ -175,11 +177,14 @@ export function TaskProjectsKanban() {
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
   const updateTask = useTaskStore((s) => s.updateTask);
   const openTaskInActiveTab = useTaskStore((s) => s.openTaskInActiveTab);
-  const setActiveTaskPage = useUIStore((s) => s.setActiveTaskPage);
-  const setTaskMode = useUIStore((s) => s.setTaskMode);
-  const setContextPanelOpen = useUIStore((s) => s.setContextPanelOpen);
   const projects = useProjectStore((s) => s.projects);
   const createProject = useProjectStore((s) => s.createProject);
+  const deleteProject = useProjectStore((s) => s.deleteProject);
+  const [menuProjectId, setMenuProjectId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [projectMenuPosition, setProjectMenuPosition] = useState({ top: 0, left: 0 });
+  const projectMenuRef = useRef<HTMLDivElement>(null);
+  const projectMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const [newProjectClientId, setNewProjectClientId] = useState('');
   const drop = useKanbanDropIndicator('application/x-task-card');
   const [error, setError] = useState(false);
@@ -192,6 +197,16 @@ export function TaskProjectsKanban() {
   useEffect(() => {
     if (adding) newNameInputRef.current?.focus();
   }, [adding]);
+
+  useEffect(() => {
+    if (!menuProjectId) return;
+    projectMenuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const outside = (event: MouseEvent) => {
+      if (event.target instanceof Node && !projectMenuRef.current?.contains(event.target) && !projectMenuButtonRef.current?.contains(event.target)) setMenuProjectId(null);
+    };
+    document.addEventListener('mousedown', outside);
+    return () => document.removeEventListener('mousedown', outside);
+  }, [menuProjectId]);
 
   const visibleProjects = projects.filter((project) => !activeClientFilterId || project.clientId === activeClientFilterId);
   const visibleProjectIds = new Set(visibleProjects.map((project) => project.id));
@@ -264,20 +279,49 @@ export function TaskProjectsKanban() {
               <button type="button" className="ui-icon-button" aria-label={`${t('tasks.addTask')} ${project.name}`} title={t('tasks.addTask')}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={() => setQuickCreateProjectId(quickCreateProjectId === project.id ? null : project.id)}><Plus /></button>
+              <button type="button" className="ui-icon-button" aria-label={t('tasks.projectActions', { name: project.name })}
+                title={t('tasks.projectActions', { name: project.name })} aria-haspopup="menu" aria-expanded={menuProjectId === project.id}
+                onClick={(event) => {
+                  if (menuProjectId === project.id) { setMenuProjectId(null); return; }
+                  projectMenuButtonRef.current = event.currentTarget;
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setProjectMenuPosition({ left: Math.max(8, Math.min(rect.right - 160, window.innerWidth - 168)), top: rect.bottom + 56 <= window.innerHeight - 8 ? rect.bottom : Math.max(8, rect.top - 56) });
+                  setMenuProjectId(project.id);
+                }}><MoreHorizontal /></button>
+              {menuProjectId === project.id && createPortal(<div ref={projectMenuRef} className="drop task-kanban-card-menu" role="menu"
+                aria-label={t('tasks.projectActions', { name: project.name })} style={projectMenuPosition}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape' || event.key === 'Tab') {
+                    setMenuProjectId(null);
+                    if (event.key === 'Escape') projectMenuButtonRef.current?.focus();
+                  }
+                }}>
+                <button type="button" className="ui-list-row drop-item task-kanban-card-menu-delete" role="menuitem" onClick={() => {
+                  setMenuProjectId(null);
+                  setPendingDelete({ id: project.id, name: project.name });
+                }}><Trash2 />{t('tasks.deleteProject')}</button>
+              </div>, document.body)}
             </div>
             {quickCreateProjectId === project.id && <div className="task-quick-create-wrapper">
               <TaskQuickCreate projectId={project.id} onClose={() => setQuickCreateProjectId(null)} onSuccess={() => setQuickCreateProjectId(null)} />
             </div>}
             <div className="crm-kanban-column-body">
+              <ProjectContinuity key={`${project.id}:${project.createdAt}`} projectId={project.id} />
               {drop.indicator(project.id)}
               {!projectTasks.length && <div className="crm-kanban-column-empty">{t('navigation.noTasks')}</div>}
               {projectTasks.map((task) => <TaskKanbanCard key={task.id} task={task} isActive={task.id === activeTaskId} dragLabel={t('tasks.moveToProject')} showActions
-                onClick={(id) => { openTaskInActiveTab(id); setActiveTaskPage('list'); setTaskMode(true); setContextPanelOpen('tasks', true); }} />)}
+                onClick={openTaskInActiveTab} />)}
             </div>
           </section>;
         })}
         {!visibleProjects.length && <div className="task-kanban-empty">{t('navigation.noProjects')}</div>}
       </div>
+      {pendingDelete && <ConfirmDialog
+        message={t(nameKey(pendingDelete.name) === 'general' ? 'tasks.deleteGeneralProjectConfirm' : 'tasks.deleteProjectConfirm', { name: pendingDelete.name })}
+        confirmLabel={t('explorer.delete')}
+        onConfirm={() => { void deleteProject(pendingDelete.id); setPendingDelete(null); }}
+        onCancel={() => { setPendingDelete(null); projectMenuButtonRef.current?.focus(); }}
+      />}
     </section>
   );
 }

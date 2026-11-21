@@ -4,6 +4,7 @@ import { CONTEXT_MAX_PX, CONTEXT_MIN_PX, vwToPx } from '../../../stores/layoutGe
 import { useUIStore } from '../../../stores/uiStore';
 
 interface ContextResizeHandleProps {
+  side?: 'left' | 'right';
   contextRef: RefObject<HTMLElement | null>;
   primaryContentRef?: RefObject<HTMLElement | null>;
   widthPx?: number;
@@ -15,6 +16,7 @@ interface ContextResizeHandleProps {
 
 /** Resize handle between contextual panel and center content (inside primary). */
 export function ContextResizeHandle({
+  side,
   contextRef,
   primaryContentRef,
   widthPx,
@@ -24,6 +26,7 @@ export function ContextResizeHandle({
   ariaLabel,
 }: ContextResizeHandleProps) {
   const { onPointerDown, onKeyDown, ariaValueMin, ariaValueMax } = useContextPanelResize({
+    side,
     contextRef,
     primaryContentRef,
     widthPx,

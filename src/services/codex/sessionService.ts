@@ -3,7 +3,6 @@ import { crmFormsDb } from '../../data/crmFormsDb';
 import { isTauriRuntime } from '../runtime';
 import { runCodexMigration } from './migration';
 import { useChatStore } from '../../stores/chatStore';
-import { finalizeProviderDispatch, isProviderThreadInaccessible, persistedGithubDispatchAllowed } from '../github/aiEgress';
 import type { ChatMessage } from '../../types';
 import { codexDesktopClient, subscribeCodexEvents } from './desktopClient';
 import { boundedDelta, requestStatus, terminalStatus } from './eventReducer';
@@ -162,20 +161,6 @@ export class CodexSessionService {
     if (!clientCommandId || !scope.appThreadId || !scope.workspaceRoot || !text.trim()) {
       throw new Error('A Codex submission needs a command ID, thread, workspace and text');
     }
-    if (scope.github) {
-      const thread = await db.chatThreads.get(scope.appThreadId);
-      const history = await db.chatMessages.where('threadId').equals(scope.appThreadId).toArray();
-      if (!persistedGithubDispatchAllowed({
-        accountId: scope.github.accountId,
-        repoId: scope.github.repoId,
-        ref: scope.github.ref,
-        requestedWorkspaceId: scope.workspaceId,
-        threadWorkspaceId: thread?.workspaceId,
-        messageWorkspaceIds: history.map((message) => message.workspaceId),
-      })) {
-        throw new Error('GitHub provider thread does not match the consented repository. Previously sent content cannot be recalled.');
-      }
-    }
     const submittedText = scope.context.trim()
       ? `${text.trim()}\n\n[TABS CONTEXT SNAPSHOT]\n${scope.context.trim()}`
       : text.trim();
@@ -228,40 +213,14 @@ export class CodexSessionService {
       await db.codexRuns.update(run.runId, { status: 'starting', updatedAt: Date.now() });
       try {
         const connection = await this.connect(run.scope.workspaceRoot, undefined, true);
-        const githubScope = run.scope.github
-          ? { ...run.scope, document: undefined, attachments: [], selectedText: undefined, hasConnectedFolder: false, taskId: undefined, settingsTab: undefined }
-          : run.scope;
-        const thread = await db.chatThreads.get(run.appThreadId);
-        const history = await db.chatMessages.where('threadId').equals(run.appThreadId).toArray();
-        if (run.scope.github && !persistedGithubDispatchAllowed({
-          accountId: run.scope.github.accountId,
-          repoId: run.scope.github.repoId,
-          ref: run.scope.github.ref,
-          requestedWorkspaceId: run.scope.workspaceId,
-          threadWorkspaceId: thread?.workspaceId,
-          messageWorkspaceIds: history.map((message) => message.workspaceId),
-        })) {
-          await db.codexRuns.update(run.runId, {
-            status: 'cancelled',
-            submittedText: '',
-            error: 'GitHub provider thread does not match the consented repository. Previously sent content cannot be recalled.',
-            scope: { ...run.scope, context: '', attachments: [], selectedText: undefined, document: undefined },
-            updatedAt: Date.now(),
-          });
-          this.activeRunId = null;
-          this.activeAppThreadId = null;
-          this.notify();
-          return;
-        }
-        const tools = toolsForScope(githubScope);
+        const tools = toolsForScope(run.scope);
         const toolNames = tools.map((tool) => tool.name);
         let session = await db.codexSessions.get(run.appThreadId);
         let nativeThreadId: string;
         if (session && session.workspaceRoot.toLowerCase() === connection.workspaceRoot.toLowerCase()
           && session.binaryVersion === connection.version && session.toolSchemaVersion === TOOL_SCHEMA_VERSION
           && JSON.stringify(session.toolNames) === JSON.stringify(toolNames)
-          && (session.permissionProfile ?? 'readOnly') === run.scope.permissionProfile
-          && (!run.scope.github || session.githubWorkspaceId === `github:${run.scope.github.accountId}:${run.scope.github.repoId}:${encodeURIComponent(run.scope.github.ref)}`)) {
+          && (session.permissionProfile ?? 'readOnly') === run.scope.permissionProfile) {
           nativeThreadId = session.lastEpoch === connection.epoch
             ? session.nativeThreadId
             : await codexDesktopClient.resumeThread(connection.epoch, session.nativeThreadId, tools);
@@ -282,9 +241,6 @@ export class CodexSessionService {
             toolSchemaVersion: TOOL_SCHEMA_VERSION, toolNames, lastEpoch: connection.epoch,
             model: run.scope.model, effort: run.scope.effort,
             permissionProfile: run.scope.permissionProfile,
-            githubWorkspaceId: run.scope.github
-              ? `github:${run.scope.github.accountId}:${run.scope.github.repoId}:${encodeURIComponent(run.scope.github.ref)}`
-              : undefined,
             createdAt: now, updatedAt: now } satisfies CodexSessionRecord;
           await db.codexSessions.add(session);
         }
@@ -293,50 +249,10 @@ export class CodexSessionService {
         });
         // From here until the returned native turn ID is persisted, a pipe loss is
         // an uncertain submit. Never send the same user text again automatically.
-        if (isProviderThreadInaccessible(run.appThreadId)) {
-          await db.codexRuns.update(run.runId, {
-            status: 'cancelled',
-            submittedText: '',
-            error: 'GitHub provider dispatch was stopped. Previously sent content cannot be recalled.',
-            scope: { ...run.scope, context: '', attachments: [], selectedText: undefined },
-            updatedAt: Date.now(),
-          });
-          this.activeRunId = null;
-          this.activeAppThreadId = null;
-          this.notify();
-          return;
-        }
-        const decision = finalizeProviderDispatch({
-          provider: 'codex',
-          threadId: run.appThreadId,
-          text: run.submittedText,
-          context: run.scope.context,
-          history: [],
-          attachments: (run.scope.attachments ?? []).map((attachment) => ({
-            name: attachment.name,
-            dataUrl: attachment.dataUrl,
-          })),
-          images: run.scope.attachments?.filter((attachment) => attachment.kind === 'image').map((attachment) => attachment.dataUrl ?? '') ?? [],
-          toolOutput: '',
-          github: run.scope.github,
-        });
-        if (decision.aborted) {
-          await db.codexRuns.update(run.runId, {
-            status: 'cancelled',
-            submittedText: '',
-            error: decision.reason ?? 'GitHub provider dispatch was stopped',
-            scope: { ...run.scope, context: '', attachments: [], selectedText: undefined },
-            updatedAt: Date.now(),
-          });
-          this.activeRunId = null;
-          this.activeAppThreadId = null;
-          this.notify();
-          return;
-        }
         const nativeTurnId = await codexDesktopClient.startTurn({
           epoch: connection.epoch, threadId: nativeThreadId,
-          text: decision.text, model: run.scope.model, effort: run.scope.effort,
-          images: decision.images,
+          text: run.submittedText, model: run.scope.model, effort: run.scope.effort,
+          images: run.scope.attachments?.filter((attachment) => attachment.kind === 'image').map((attachment) => attachment.dataUrl ?? '') ?? [],
         });
         await db.codexRuns.update(run.runId, { nativeTurnId, status: 'running', updatedAt: Date.now() });
         await db.settings.delete(`codexHandoff:${run.appThreadId}`);

@@ -1,5 +1,9 @@
 // Tray icon: right-click menu with "Show TABS", "Test Notification", and
-// "Quit". Left-click focuses the main window.
+// "Quit". Single-left opens Accounts; double-left restores the main window.
+mod geometry;
+mod logic;
+mod popup;
+pub use popup::*;
 //
 // We load the icon from disk rather than using `default_window_icon()` for
 // two reasons:
@@ -20,6 +24,7 @@ use tauri::{
 use tauri_plugin_notification::NotificationExt;
 
 pub fn build(app: &tauri::AppHandle) -> tauri::Result<()> {
+    app.manage(popup::Popup::default());
     let show = MenuItem::with_id(app, "show", "Show TABS", true, None::<&str>)?;
     let test = MenuItem::with_id(
         app,
@@ -47,7 +52,10 @@ pub fn build(app: &tauri::AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "show" => show_main(app),
+            "show" => {
+                popup::hide(app);
+                show_main(app);
+            }
             "test_notification" => {
                 if let Err(e) = app
                     .notification()
@@ -63,17 +71,56 @@ pub fn build(app: &tauri::AppHandle) -> tauri::Result<()> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event
-            {
-                show_main(tray.app_handle());
+            let app = tray.app_handle();
+            match event {
+                TrayIconEvent::DoubleClick {
+                    button: MouseButton::Left,
+                    ..
+                } => {
+                    popup::double_click(app);
+                    show_main(app);
+                }
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Down,
+                    ..
+                } => popup::left_down(app),
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    rect,
+                    ..
+                } => popup::left_up(app, rect),
+                TrayIconEvent::Click {
+                    button: MouseButton::Right,
+                    ..
+                } => popup::hide(app),
+                _ => {}
             }
         })
         .build(app)?;
+    // Called from Tauri setup: WebView2 creation in a synchronous tray/event-loop
+    // callback can deadlock on Windows. Keep the prepared window hidden.
+    if let Err(error) = popup::initialize(app) {
+        // A secondary popup must not prevent the main application from starting.
+        eprintln!("[TABS] accounts tray could not initialize: {error}");
+    }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    // Compile-only registration contract. Calling this from a unit test caused
+    // STATUS_ENTRYPOINT_NOT_FOUND before the harness started on this host;
+    // actual Wry execution belongs in the separate isolated desktop fixture.
+    #[allow(dead_code)]
+    fn commands_can_be_registered_through_tray_reexports() {
+        let _handler: Box<dyn Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool> =
+            Box::new(tauri::generate_handler![
+                super::tray_popup_ready,
+                super::tray_popup_hide
+            ]);
+    }
 }
 
 fn show_main(app: &tauri::AppHandle) {
@@ -85,6 +132,8 @@ fn show_main(app: &tauri::AppHandle) {
         let _ = w.show();
         let _ = w.set_focus();
     }
+    // Restoration/activation must leave the transient popup dismissed too.
+    popup::hide(app);
 }
 
 fn load_tray_icon(app: &tauri::AppHandle) -> Option<Image<'static>> {

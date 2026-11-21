@@ -22,13 +22,14 @@ function setResizingState(active: boolean) {
 
 /**
  * Resize the contextual panel inside the primary wrapper.
- * Context always sits on the leading edge of primary (left in LTR).
+ * Resize direction follows the side occupied by the contextual panel.
  * Uses an explicit context panel ref — never previousElementSibling.
  *
  * Drag: update in-memory width only; persist on pointerup/cancel.
  * Keyboard: ArrowLeft/Right (Shift = larger step); persists each step.
  */
 export function useContextPanelResize(options: {
+  side?: 'left' | 'right';
   contextRef: RefObject<HTMLElement | null>;
   /** Primary content row — used to protect center min width. */
   primaryContentRef?: RefObject<HTMLElement | null>;
@@ -39,6 +40,7 @@ export function useContextPanelResize(options: {
   onWidthChange?: (widthPx: number, persist: boolean) => void;
 }) {
   const { contextRef, primaryContentRef, widthPx, minWidthPx, maxWidthPx, onWidthChange } = options;
+  const growSign = options.side === 'right' ? -1 : 1;
   const minWidth = minWidthPx ?? CONTEXT_MIN_PX;
   const maxWidth = maxWidthPx ?? CONTEXT_MAX_PX;
   const setContextPanelWidth = useUIStore((s) => s.setContextPanelWidth);
@@ -88,7 +90,7 @@ export function useContextPanelResize(options: {
       const onPointerMove = (ev: PointerEvent) => {
         if (!dragging.current) return;
         const delta = ev.clientX - startX;
-        const newWidth = startWidth + delta;
+        const newWidth = startWidth + delta * growSign;
         const livePrimary = resolvePrimaryWidth() ?? primaryWidth;
         const clampedPx = clampContextWidthPx(newWidth, livePrimary, handleWidth, undefined, minWidth, maxWidth);
         if (onWidthChange) onWidthChange(clampedPx, false);
@@ -124,7 +126,7 @@ export function useContextPanelResize(options: {
       handleEl.addEventListener('pointerup', endDrag);
       handleEl.addEventListener('pointercancel', endDrag);
     },
-    [contextRef, setContextPanelWidth, endDragSession, resolvePrimaryWidth, minWidth, maxWidth, onWidthChange],
+    [contextRef, setContextPanelWidth, endDragSession, resolvePrimaryWidth, minWidth, maxWidth, onWidthChange, growSign],
   );
 
   const onKeyDown = useCallback(
@@ -135,7 +137,7 @@ export function useContextPanelResize(options: {
       const step = e.shiftKey ? KEYBOARD_RESIZE_STEP_LARGE_PX : KEYBOARD_RESIZE_STEP_PX;
       const currentVw = useUIStore.getState().contextPanelWidth;
       const currentPx = widthPx ?? vwToPx(currentVw, window.innerWidth);
-      const nextRaw = applyContextKeyboardDelta(currentPx, e.key, step);
+      const nextRaw = applyContextKeyboardDelta(currentPx, e.key, step * growSign);
       const handleWidth =
         e.currentTarget.getBoundingClientRect().width || HANDLE_WIDTH_PX;
       const primaryWidth = resolvePrimaryWidth();
@@ -143,7 +145,7 @@ export function useContextPanelResize(options: {
       if (onWidthChange) onWidthChange(clampedPx, true);
       else setContextPanelWidth(pxToVw(clampedPx, window.innerWidth), { persist: true });
     },
-    [resolvePrimaryWidth, setContextPanelWidth, widthPx, minWidth, maxWidth, onWidthChange],
+    [resolvePrimaryWidth, setContextPanelWidth, widthPx, minWidth, maxWidth, onWidthChange, growSign],
   );
 
   return {

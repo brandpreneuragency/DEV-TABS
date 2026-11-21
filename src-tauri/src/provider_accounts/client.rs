@@ -8,7 +8,6 @@ use std::time::{Duration, Instant};
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 
 use crate::codex::discovery;
 use crate::codex::CliOwnedJob as OwnedJob;
@@ -64,7 +63,7 @@ fn isolated_command(executable: &Path, home: &Path, work: &Path) -> Command {
             "-c",
             "forced_login_method=\"chatgpt\"",
             "-c",
-            "features.secret_auth_storage=false",
+            "features.secret_auth_storage=true",
             "-c",
             "model_provider=\"openai\"",
             "-c",
@@ -114,6 +113,8 @@ impl Client {
         for name in ["auth.json", "config.toml", ".codex"] {
             super::storage::reject_link(&home.join(name))?;
         }
+        super::storage::reject_link(&home.join("secrets"))?;
+        super::storage::reject_link(&home.join("secrets/codex_auth.age"))?;
         let mut child = isolated_command(executable, home, &work)
             .spawn()
             .map_err(|_| "Could not start isolated Codex account process")?;
@@ -306,27 +307,9 @@ pub fn valid_auth_url(url: &str) -> bool {
         && !url.chars().any(|c| c.is_control() || c == '\\')
 }
 
-pub fn keyring_user(home: &Path) -> Result<String, String> {
-    let canonical = home
-        .canonicalize()
-        .map_err(|_| "Could not resolve isolated auth home")?;
-    let digest = format!(
-        "{:x}",
-        Sha256::digest(canonical.to_string_lossy().as_bytes())
-    );
-    Ok(format!("cli|{}", &digest[..16]))
-}
-
 pub fn read_identity(home: &Path, account: &Value) -> Option<super::model::Identity> {
-    // Codex 0.159.2 direct backend, official login/src/auth/storage.rs:
-    // service="Codex Auth", user="cli|" + first16(sha256(canonical CODEX_HOME)).
-    // features.secret_auth_storage=false selects this HOME-specific backend.
-    // Do not enumerate the keyring, read auth.json or try a native/default HOME.
-    let user = keyring_user(home).ok()?;
-    let serialized = keyring::Entry::new("Codex Auth", &user)
-        .ok()?
-        .get_password()
-        .ok()?;
+    // Only this slot's Codex-owned encrypted auth. No legacy/default-home fallback.
+    let serialized = super::auth_storage::read_auth(home)?;
     identity_from_serialized(account, &serialized)
 }
 
@@ -433,7 +416,10 @@ mod tests {
             .unwrap();
         let a = super::super::storage::directory(dir.path(), "codex-1").unwrap();
         let b = super::super::storage::directory(dir.path(), "codex-2").unwrap();
-        assert_ne!(keyring_user(&a).unwrap(), keyring_user(&b).unwrap());
+        assert_ne!(
+            super::super::auth_storage::keyring_user(&a),
+            super::super::auth_storage::keyring_user(&b)
+        );
         let c = isolated_command(Path::new("codex.exe"), &a, &a);
         let env: std::collections::HashMap<_, _> = c
             .get_envs()
@@ -456,6 +442,125 @@ mod tests {
             assert!(!env.contains_key(name));
         }
     }
+    #[test]
+    fn oauth_storage_avoids_windows_keyring_payload_limit_without_plaintext_fallback() {
+        let command =
+            isolated_command(Path::new("codex.exe"), Path::new("slot"), Path::new("work"));
+        let args: Vec<_> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.contains(&"cli_auth_credentials_store=\"keyring\"".to_string()));
+        assert!(args.contains(&"features.secret_auth_storage=true".to_string()));
+        assert!(!args
+            .iter()
+            .any(|arg| arg.contains("credentials_store=\"auto\"")
+                || arg.contains("credentials_store=\"file\"")));
+    }
+    #[test]
+    #[ignore = "Explicit installed CLI synthetic encrypted-storage smoke; no owner login or inference"]
+    fn installed_encrypted_auth_write_and_identity_restart() {
+        struct OwnedEntry(keyring::Entry);
+        impl Drop for OwnedEntry {
+            fn drop(&mut self) {
+                let _ = self.0.delete_credential();
+            }
+        }
+        let dir = tempfile::Builder::new()
+            .prefix("tabs-codex-auth-restart-")
+            .tempdir_in(super::super::storage::test_temp_root())
+            .unwrap();
+        let home = dir.path().canonicalize().unwrap();
+        drop(Client::start(&home).unwrap());
+        let (launch, _) = discovery::discover(None).unwrap();
+        let entry = OwnedEntry(
+            keyring::Entry::new(
+                "codex",
+                &super::super::auth_storage::keyring_user(&home).unwrap(),
+            )
+            .unwrap(),
+        );
+        assert!(matches!(
+            entry.0.get_password(),
+            Err(keyring::Error::NoEntry)
+        ));
+        let template = isolated_command(&launch.executable, &home, &home.join("work"));
+        let mut command = Command::new(&launch.executable);
+        command.env_clear().envs(
+            template
+                .get_envs()
+                .filter_map(|(name, value)| value.map(|v| (name, v))),
+        );
+        command
+            .current_dir(home.join("work"))
+            .args([
+                "-c",
+                "cli_auth_credentials_store=\"keyring\"",
+                "-c",
+                "features.secret_auth_storage=true",
+                "login",
+                "--with-api-key",
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
+        }
+        let mut child = command.spawn().unwrap();
+        let job = OwnedJob::assign(&child).unwrap();
+        let synthetic_key = format!("synthetic-not-a-credential-{}", "x".repeat(6000));
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(synthetic_key.as_bytes())
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                assert!(status.success(), "Synthetic CLI persistence failed");
+                break;
+            }
+            if Instant::now() >= deadline {
+                job.terminate();
+                let _ = child.wait();
+                panic!("Synthetic CLI persistence timed out");
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let stored: Value =
+            serde_json::from_str(&super::super::auth_storage::read_auth(&home).unwrap()).unwrap();
+        assert!(stored["OPENAI_API_KEY"].as_str() == Some(synthetic_key.as_str()));
+        let short_key = entry.0.get_password().unwrap();
+        assert!(short_key.len() < 2560);
+        assert!(!home.join("auth.json").exists());
+        // Local attribution only: unusable JWT fixtures cannot stand in for a
+        // provider-authenticated account/read. Real OAuth remains owner acceptance.
+        let auth = super::super::auth_storage::tests::synthetic_auth();
+        super::super::auth_storage::tests::write_fixture(&home, &short_key, &auth);
+        let account = json!({
+            "account":{"type":"chatgpt","email":"synthetic@example.test","planType":"plus"},
+            "workspaceRouting":{"chatgptAccountId":"synthetic-workspace"}
+        });
+        for _ in 0..2 {
+            let identity = read_identity(&home, &account)
+                .expect("Encrypted slot identity must match account fixture");
+            assert_eq!(identity.email.as_deref(), Some("synthetic@example.test"));
+            assert_eq!(
+                identity.workspace_id.as_deref(),
+                Some("synthetic-workspace")
+            );
+        }
+        entry.0.delete_credential().unwrap();
+        assert!(matches!(
+            entry.0.get_password(),
+            Err(keyring::Error::NoEntry)
+        ));
+    }
+
     #[test]
     #[ignore = "Explicit signed-out installed CLI protocol smoke; never logs in or runs inference"]
     fn installed_codex_signed_out_protocol() {

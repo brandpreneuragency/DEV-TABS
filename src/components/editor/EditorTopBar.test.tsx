@@ -4,6 +4,10 @@ import { I18nextProvider } from 'react-i18next';
 import i18n from '../../i18n';
 import { useUIStore } from '../../stores/uiStore';
 import { EditorTopBar } from './EditorTopBar';
+import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { SourceFileFormat } from './SourceFileFormat';
+import { parseByExt, serialize } from '../../services/fileFormat';
 
 afterEach(cleanup);
 
@@ -47,5 +51,28 @@ describe('Editor overflow menu', () => {
     await waitFor(() => expect(screen.getByPlaceholderText('Find')).toHaveFocus());
     fireEvent.change(screen.getByPlaceholderText('Find'), { target: { value: 'example' } });
     expect(screen.getByPlaceholderText('Find')).toHaveValue('example');
+  });
+
+  it.each(['Replace all', 'Replace current'].flatMap((action) =>
+    ['<New>', '<b>New</b>', '<div>New</div>', 'A &amp; B', '', '$&'].map((replacement) => ({ action, replacement })),
+  ))('$action inserts literal source replacement $replacement', ({ action, replacement }) => {
+    const source = '{\n  "name": "Old",\n  "html": "<div>Old</div>"\n}\n';
+    const editor = new Editor({ extensions: [StarterKit, SourceFileFormat], content: parseByExt(source, 'json') });
+    try {
+      render(<I18nextProvider i18n={i18n}><EditorTopBar editor={editor} onSave={vi.fn()} /></I18nextProvider>);
+      fireEvent.click(screen.getByRole('button', { name: 'More' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Find & Replace' }));
+      fireEvent.change(screen.getByPlaceholderText('Find'), { target: { value: 'Old' } });
+      fireEvent.change(screen.getByPlaceholderText('Replace'), { target: { value: replacement } });
+      fireEvent.click(screen.getByTitle(action));
+
+      const expected = action === 'Replace all'
+        ? source.replaceAll('Old', () => replacement) : source.replace('Old', () => replacement);
+      expect(serialize(editor.getJSON(), 'json')).toBe(expected);
+      expect(editor.state.doc.childCount).toBe(1);
+      expect(editor.state.doc.firstChild?.type.name).toBe('codeBlock');
+    } finally {
+      editor.destroy();
+    }
   });
 });

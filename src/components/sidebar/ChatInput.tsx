@@ -1,11 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { liveQuery } from 'dexie';
 import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, ChangeEvent } from 'react';
 import type { Editor } from '@tiptap/react';
+import type { MemoryChatContext } from '../../services/memoryNotes/chatContext';
 import { isTauriRuntime } from '../../services/runtime';
-import { useCodexService } from '../../services/codex/useCodexService';
-import { useCliProviderService } from '../../services/providers/useCliProviderService';
 import { ChatModelControls } from './ChatModelControls';
+import { useOpenCodeStore } from '../../stores/openCodeStore';
 import { Reply, Zap, Plus, X, Square, File, Folder } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '../../stores/uiStore';
@@ -13,8 +12,6 @@ import { useActionsStore } from '../../stores/actionsStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useAIStore } from '../../stores/aiStore';
 import { useStreamingChat } from '../../hooks/useStreamingChat';
-import type { GithubAiMessageContext } from '../../hooks/useStreamingChat';
-import { useGithubStore } from '../../stores/githubStore';
 import { useWorkspaceStore, flattenTree, findNodeByFullPath } from '../../stores/workspaceStore';
 import type { TreeNode } from '../../stores/workspaceStore';
 import { readBinaryFile, getMetadata, basename, getExt } from '../../services/fs-adapter';
@@ -24,12 +21,11 @@ import { usePlaceholder } from '../../utils/placeholders';
 import {
   ComposerCard,
   ComposerIconButton,
-  ComposerRow,
   ComposerSendButton,
   ComposerTextarea,
 } from '../ui/Composer';
 import { AttachmentPreviewItem, AttachmentPreviewList } from '../ui/AttachmentPreview';
-import type { Attachment, ChatMessage, ChatProviderId, QuickPrompt } from '../../types';
+import type { Attachment, ChatMessage, QuickPrompt } from '../../types';
 
 interface ChatInputProps {
   mode: 'writer' | 'task';
@@ -37,11 +33,10 @@ interface ChatInputProps {
   workspaceId: string | null;
   taskId?: string | null;
   settingsTab?: string | null;
+  memoryContext?: MemoryChatContext;
   replyToMessage?: ChatMessage | null;
   onClearReply?: () => void;
   editor?: Editor | null;
-  /** Reuses this composer with a strict, target-bound GitHub context. */
-  githubMode?: boolean;
 }
 
 /** Max height for the chat input box, expressed as 50vw in pixels. */
@@ -59,10 +54,6 @@ const IMAGE_MIME_TYPES = new Set([
   'image/bmp',
   'image/svg+xml',
 ]);
-
-function isChatProviderId(value: unknown): value is ChatProviderId {
-  return value === 'codex' || value === 'grok' || value === 'commandCode' || value === 'openCode';
-}
 
 /** Convert raw bytes to a base64 string (chunked to avoid call-stack limits). */
 function uint8ToBase64(bytes: Uint8Array): string {
@@ -138,10 +129,10 @@ const TASK_BUILT_INS: PromptOption[] = [
   },
 ];
 
-export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, replyToMessage, onClearReply, editor, githubMode = false }: ChatInputProps) {
+export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, memoryContext, replyToMessage, onClearReply, editor }: ChatInputProps) {
   const { t } = useTranslation();
   const accentColor = 'var(--c-accent-2)';
-  const [value, setValue] = useState('');
+  const [inputValue, setInputValue] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const queryAIPlaceholder = usePlaceholder('queryAI');
 
@@ -150,27 +141,6 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
   const [sendError, setSendError] = useState('');
   const sendLockRef = useRef(false);
   const [quickPrompts, setQuickPrompts] = useState<QuickPrompt[]>([]);
-  const githubPreparation = useGithubStore((state) => state.preparedAi);
-  const [githubInputOverride, setGithubInputOverride] = useState<{
-    preparation: NonNullable<typeof githubPreparation>;
-    value: string;
-  } | null>(null);
-  const inputValue = githubMode
-    ? githubPreparation && !githubPreparation.blocked
-      ? githubInputOverride?.preparation === githubPreparation
-        ? githubInputOverride.value
-        : t(`github.aiPrompt.${githubPreparation.purpose}`)
-      : ''
-    : value;
-  const setInputValue = useCallback((next: string) => {
-    if (!githubMode) {
-      setValue(next);
-      return;
-    }
-    if (githubPreparation && !githubPreparation.blocked) {
-      setGithubInputOverride({ preparation: githubPreparation, value: next });
-    }
-  }, [githubMode, githubPreparation]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -181,8 +151,8 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
   const indexedFolderRef = useRef<string | null>(null);
 
   const { getActiveRootNode, getActiveFolderId, ensureSubtreeLoaded, activeWorkspaceId } = useWorkspaceStore();
-  const rootNode = getActiveRootNode();
-  const activeFolderId = getActiveFolderId();
+  const rootNode = memoryContext ? null : getActiveRootNode();
+  const activeFolderId = memoryContext ? null : getActiveFolderId();
 
   const [dragOver, setDragOver] = useState(false);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -209,59 +179,20 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
     }
   }, [workspaceId, taskId]);
 
-  const { selectedText, setSelectedText } = useUIStore();
+  const { selectedText: editorSelection, setSelectedText } = useUIStore();
+  const selectedText = memoryContext ? null : editorSelection;
   const desktop = isTauriRuntime();
-  const codex = useCodexService();
-  const cliRun = useCliProviderService();
   const threads = useChatStore((state) => state.threads);
-  const currentChatContext = useChatStore((state) => state.currentContext);
-  const newChat = useChatStore((state) => state.newChat);
-  const setEmptyThreadOrigin = useChatStore((state) => state.setEmptyThreadOrigin);
   const activeThread = threads.find((thread) => thread.id === threadId);
-  const githubContextReady = !githubMode || (currentChatContext?.workspaceId === workspaceId
-    && !currentChatContext.taskId && !currentChatContext.settingsTab);
-  const [preferredProvider, setPreferredProvider] = useState<ChatProviderId>('codex');
   const threadOrigin = activeThread?.origin;
-  const providerLocked = threadOrigin === 'legacy_api' || threadOrigin === 'mockEcho' || threadOrigin === 'mockTools';
-  const selectedProvider = isChatProviderId(threadOrigin) ? threadOrigin : preferredProvider;
-  const cliSelected = selectedProvider !== 'codex' && !providerLocked;
-  const ownRun = desktop && (selectedProvider === 'codex'
-    ? Boolean(codex.activeRunId && codex.activeAppThreadId === (useChatStore.getState().activeThreadId ?? threadId))
-    : Boolean(cliRun && cliRun.appThreadId === (useChatStore.getState().activeThreadId ?? threadId)));
+  const providerLocked = Boolean(activeThread && threadOrigin !== 'openCode');
+  const ownRun = useOpenCodeStore((state) => Boolean(state.runsByThread[threadId]?.busy));
   const getActiveAgent = useAIStore((state) => state.getActiveAgent);
   const { openSettings } = useUIStore();
-  const { sendMessage, stopStreaming } = useStreamingChat(threadId, mode, workspaceId ?? undefined, taskId ?? undefined, settingsTab ?? undefined, editor);
+  const { sendMessage, stopStreaming } = useStreamingChat(threadId, mode, workspaceId ?? undefined, taskId ?? undefined, settingsTab ?? undefined, editor, memoryContext);
 
   const activeAgent = getActiveAgent();
   const actionsLabel = t('chat.actions');
-
-  useEffect(() => {
-    const subscription = liveQuery(async () => {
-      const saved = await db.settings.get('activeChatProviderId');
-      return isChatProviderId(saved?.value) ? saved.value : 'codex';
-    }).subscribe({ next: setPreferredProvider, error: () => setPreferredProvider('codex') });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  async function handleProviderChange(providerId: ChatProviderId) {
-    if (providerLocked || providerId === selectedProvider) return;
-    await db.settings.put({ key: 'activeChatProviderId', value: providerId });
-    setPreferredProvider(providerId);
-    if (!activeThread) return;
-    const updated = await setEmptyThreadOrigin(activeThread.id, providerId);
-    if (updated) return;
-    await newChat({ mode, workspaceId: workspaceId ?? undefined, taskId: taskId ?? undefined,
-      settingsTab: settingsTab ?? undefined, origin: providerId });
-  }
-
-  async function handleModelSelect(providerId: ChatProviderId, modelId: string) {
-    if (providerLocked) return;
-    if (providerId !== selectedProvider) await handleProviderChange(providerId);
-    const key = providerId === 'codex' ? 'codexModelId' : `providerModelId:${providerId}`;
-    if ((await db.settings.get(key))?.value === modelId) return;
-    await db.settings.put({ key, value: modelId });
-    if (providerId === 'codex') await db.settings.put({ key: 'codexEffort', value: '' });
-  }
 
   // Outside-click dismissal for dropdowns
   useEffect(() => {
@@ -292,7 +223,7 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
   useEffect(() => {
     const handler = (e: Event) => {
       const prompt = (e as CustomEvent<string>).detail;
-      setValue(prompt);
+      setInputValue(prompt);
       textareaRef.current?.focus();
     };
     window.addEventListener('quickPromptSelected', handler);
@@ -302,20 +233,9 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
   const handleSend = useCallback(async () => {
     const trimmed = inputValue.trim();
     if (providerLocked || (!trimmed && attachments.length === 0) || !desktop || sendLockRef.current) return;
-    if (githubMode && (!githubPreparation || githubPreparation.blocked || !githubPreparation.packet)) return;
     sendLockRef.current = true;
     setSendError('');
-    const toSend = githubMode ? [] : attachments.slice();
-    const githubDispatch: GithubAiMessageContext | undefined = githubMode && githubPreparation?.packet && !githubPreparation.blocked
-      ? {
-          accountId: githubPreparation.accountId,
-          repoId: githubPreparation.repoId,
-          ref: githubPreparation.ref,
-          private: githubPreparation.private,
-          purpose: githubPreparation.purpose,
-          packet: githubPreparation.packet,
-        }
-      : undefined;
+    const toSend = attachments.slice();
     const replyData = replyToMessage
       ? {
           id: replyToMessage.id,
@@ -326,21 +246,20 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
       : undefined;
     setInputValue('');
     setAttachments([]);
-    if (!githubMode) onClearReply?.();
+    onClearReply?.();
     userHeightRef.current = 0;
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
     try {
       await sendMessage(
-        desktop && !trimmed ? t('codex.reviewAttachments') : trimmed,
-        githubMode ? undefined : selectedText?.text,
-        githubMode ? undefined : selectedText?.from,
-        githubMode ? undefined : selectedText?.to,
+        desktop && !trimmed ? t('openCode.reviewAttachments') : trimmed,
+        selectedText?.text,
+        selectedText?.from,
+        selectedText?.to,
         toSend.length ? toSend : undefined,
         false,
-        githubMode ? undefined : replyData,
-        githubDispatch,
+        replyData,
       );
     } catch (err) {
       setInputValue(trimmed);
@@ -349,7 +268,7 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
     } finally {
       sendLockRef.current = false;
     }
-  }, [inputValue, attachments, desktop, providerLocked, sendMessage, selectedText, replyToMessage, onClearReply, t, githubMode, githubPreparation, setInputValue]);
+  }, [inputValue, attachments, desktop, providerLocked, sendMessage, selectedText, replyToMessage, onClearReply, t]);
 
   const handleKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (mentionOpen) {
@@ -414,11 +333,6 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (githubMode || cliSelected) {
-      e.target.value = '';
-      if (!githubMode) useUIStore.getState().showToast(t('cliChat.attachmentsUnavailable'), 'error');
-      return;
-    }
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
     const toast = (msg: string) => useUIStore.getState().showToast(msg, 'error');
@@ -478,7 +392,7 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
       const att = prev[index];
       if (att) {
         const token = '@' + att.name;
-        setValue((v) => (v.includes(token) ? v.replace(token, '') : v));
+        setInputValue((current) => (current.includes(token) ? current.replace(token, '') : current));
       }
       return prev.filter((_, i) => i !== index);
     });
@@ -486,14 +400,14 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
 
   const insertTokenAtCaret = (token: string) => {
     const ta = textareaRef.current;
-    const current = ta ? ta.value : value;
+    const current = ta ? ta.value : inputValue;
     const caret = ta ? ta.selectionStart ?? current.length : current.length;
     const before = current.slice(0, caret);
     const after = current.slice(caret);
     const needsLeadingSpace = before.length > 0 && !/\s$/.test(before);
     const insertText = (needsLeadingSpace ? ' ' : '') + token + ' ';
     const newValue = before + insertText + after;
-    setValue(newValue);
+    setInputValue(newValue);
     requestAnimationFrame(() => {
       const ta2 = textareaRef.current;
       if (ta2) {
@@ -542,7 +456,6 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
   };
 
   const handleDragOver = (e: ReactDragEvent<HTMLDivElement>) => {
-    if (githubMode || cliSelected) return;
     const types = e.dataTransfer.types;
     if (types.includes('application/x-tabs-tree-node') || types.includes('text/plain')) {
       e.preventDefault();
@@ -559,7 +472,6 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
   const handleDrop = (e: ReactDragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragOver(false);
-    if (githubMode || cliSelected) return;
     const raw = e.dataTransfer.getData('application/x-tabs-tree-node');
     let fullPath: string | undefined;
     let kind: 'file' | 'directory' | undefined;
@@ -593,13 +505,8 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
     const next = e.target.value;
     setInputValue(next);
     handleInput();
-    if (githubMode || cliSelected) {
-      setMentionOpen(false);
-      setMentionStart(null);
-      return;
-    }
     const caret = e.target.selectionStart ?? next.length;
-    const m = detectMention(next, caret);
+    const m = memoryContext ? null : detectMention(next, caret);
     if (m) {
       setMentionStart(m.start);
       setMentionQuery(m.query);
@@ -614,15 +521,15 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
   const selectMention = (node: TreeNode) => {
     if (mentionStart === null) return;
     const ta = textareaRef.current;
-    const caret = ta ? ta.selectionStart ?? value.length : value.length;
+    const caret = ta ? ta.selectionStart ?? inputValue.length : inputValue.length;
     const start = mentionStart;
-    const before = value.slice(0, start);
-    const after = value.slice(caret);
+    const before = inputValue.slice(0, start);
+    const after = inputValue.slice(caret);
     const token = '@' + node.name;
     const needsTrailingSpace = after.length > 0 && !/^\s/.test(after);
     const inserted = token + (needsTrailingSpace ? ' ' : '');
     const newValue = before + inserted + after;
-    setValue(newValue);
+    setInputValue(newValue);
     if (node.kind === 'file' && isImageFile(node.fullPath)) {
       void attachDroppedPath(node.fullPath, 'file', node.path);
     } else {
@@ -669,14 +576,13 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
     };
   }, [mentionOpen, activeFolderId, indexedFolderId, rootNode, ensureSubtreeLoaded, activeWorkspaceId]);
 
-  const canSend = desktop && !providerLocked && !ownRun && (inputValue.trim().length > 0 || attachments.length > 0)
-    && (!githubMode || (githubContextReady && !!githubPreparation && !githubPreparation.blocked && !!githubPreparation.packet));
+  const canSend = desktop && !providerLocked && !ownRun && (inputValue.trim().length > 0 || attachments.length > 0);
   const promptOptions: PromptOption[] = mode === 'task' ? [...TASK_BUILT_INS, ...quickPrompts] : quickPrompts;
 
   return (
     <div style={{ flexShrink: 0, padding: 0, height: 'fit-content' }}>
       {sendError && <p role="alert" style={{ padding: '4px 12px' }}>{sendError}</p>}
-      {!githubMode && selectedText && (
+      {selectedText && (
         <div style={{ marginBottom: 8, fontSize: 'var(--fs-sm)', color: accentColor, background: 'var(--c-background-4)', borderRadius: 'var(--radius-sm)', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="med">{t('chat.context')}</span>
           <span className="trunc italic subtle" style={{ flex: 1, minWidth: 0 }}>
@@ -695,7 +601,7 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
         </div>
       )}
 
-      {!githubMode && replyToMessage && (
+      {replyToMessage && (
         <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, background: 'var(--c-background-4)', borderRadius: 'var(--radius-sm)', padding: '6px 10px', fontSize: 'var(--fs-sm)', border: '1px solid var(--c-border-1)' }}>
           <Reply className="ui-icon"  style={{ color: accentColor, flexShrink: 0 }} />
           <div style={{ display: 'flex', alignItems: 'stretch', gap: 6, flex: 1, overflow: 'hidden' }}>
@@ -733,7 +639,7 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
           onMouseDown={handleResizeStart}
           title="Drag up to expand"
         />
-        {!githubMode && attachments.length > 0 && (
+        {attachments.length > 0 && (
           <AttachmentPreviewList>
             {attachments.map((att, i) => (
               <AttachmentPreviewItem
@@ -762,13 +668,12 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
           value={inputValue}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder={githubMode ? t('github.aiComposerPlaceholder') : queryAIPlaceholder || t('chat.askPlaceholder', { name: activeAgent.name })}
-          aria-label={githubMode ? t('github.aiComposerLabel') : t('chat.askPlaceholder', { name: activeAgent.name })}
+          placeholder={queryAIPlaceholder || t('chat.askPlaceholder', { name: activeAgent.name })}
+          aria-label={t('chat.askPlaceholder', { name: activeAgent.name })}
           rows={1}
-          style={{ padding: '18px 18px 0' }}
         />
 
-        {!githubMode && mentionOpen && (
+        {mentionOpen && (
           <div ref={mentionRef} className="drop chat-mention-dropup" style={{ left: 12, right: 12, bottom: '100%', marginBottom: 0, maxHeight: 240, overflowY: 'auto' }}>
             {indexing ? (
               <div className="subtle" style={{ padding: '8px 12px', fontSize: 'var(--fs-sm)' }}>{t('chat.indexing')}</div>
@@ -796,9 +701,8 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
           </div>
         )}
 
-        <ComposerRow className="chat-input-bottom-row">
-          <div className="chat-input-bottom-col chat-input-bottom-col--left">
-            {!githubMode && <div className="chat-input-bottom-col chat-input-bottom-col--tools">
+        <div className="chat-input-bottom-row">
+            <div className="chat-input-bottom-col chat-input-bottom-col--tools">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -808,18 +712,10 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
                 onChange={handleFileChange}
               />
               <ComposerIconButton
-                onClick={() => {
-                  if (cliSelected) {
-                    useUIStore.getState().showToast(t('cliChat.attachmentsUnavailable'), 'error');
-                    return;
-                  }
-                  fileInputRef.current?.click();
-                }}
+                onClick={() => fileInputRef.current?.click()}
                 className="composer-attach-button"
-                title={cliSelected ? t('cliChat.attachmentsUnavailable') : t('chat.attachFile')}
-                aria-label={cliSelected ? t('cliChat.attachmentsUnavailable') : t('chat.attachFile')}
-                aria-disabled={cliSelected}
-                style={cliSelected ? { opacity: 0.4 } : undefined}
+                title={t('chat.attachFile')}
+                aria-label={t('chat.attachFile')}
               >
                 <Plus className="ui-icon"  />
               </ComposerIconButton>
@@ -871,12 +767,9 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
                   </div>
                 )}
               </div>
-            </div>}
+            </div>
 
-            <ChatModelControls providerId={selectedProvider} providerLocked={providerLocked}
-              switchingLocked={ownRun || (githubMode && !githubContextReady)}
-              threadId={threadId} workspaceId={workspaceId} onSelectModel={handleModelSelect} />
-          </div>
+            <ChatModelControls threadId={threadId} locked={providerLocked || ownRun} />
 
           {/* Right side: send button */}
           <div className="chat-input-bottom-col chat-input-bottom-col--send">
@@ -891,7 +784,7 @@ export function ChatInput({ mode, threadId, workspaceId, taskId, settingsTab, re
             )}
             <ComposerSendButton onClick={handleSend} disabled={!canSend} title={t('chat.send')} />
           </div>
-        </ComposerRow>
+        </div>
       </ComposerCard>
     </div>
   );

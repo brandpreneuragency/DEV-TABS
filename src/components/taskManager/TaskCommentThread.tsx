@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { TaskComment, FileViewerItem } from '../../types';
-import { Reply, Sparkles, Trash2 } from 'lucide-react';
+import { Copy, Reply, Sparkles, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLongPress } from '../../hooks/useLongPress';
 import { useTaskCommentStore } from '../../stores/taskCommentStore';
@@ -61,6 +61,7 @@ function CommentContextMenu({
   y,
   comment,
   onReply,
+  onCopy,
   onDelete,
   onClose,
   onSendToAI,
@@ -69,6 +70,7 @@ function CommentContextMenu({
   y: number;
   comment: TaskComment;
   onReply: () => void;
+  onCopy: () => void;
   onSendToAI: () => void;
   onDelete: () => void;
   onClose: () => void;
@@ -100,7 +102,7 @@ function CommentContextMenu({
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const menuW = 192;
-  const menuH = 116;
+  const menuH = 154;
   const left = Math.min(x, vw - menuW - 8);
   const top = Math.min(y, vh - menuH - 8);
 
@@ -117,6 +119,20 @@ function CommentContextMenu({
       >
         <Reply />
         Reply
+      </button>
+      <button
+        type="button"
+        disabled={!hasText}
+        onClick={() => {
+          if (hasText) {
+            onCopy();
+            onClose();
+          }
+        }}
+        className={`ui-list-row drop-item${hasText ? '' : ' cursor-not-allowed'}`}
+      >
+        <Copy />
+        {t('editor.copy')}
       </button>
       <button
         type="button"
@@ -272,6 +288,7 @@ function CommentBubble({
 }
 
 export function TaskCommentThread({ comments, onReplyComment }: TaskCommentThreadProps) {
+  const { t } = useTranslation();
   const [contextMenu, setContextMenu] = useState<{
     comment: TaskComment;
     x: number;
@@ -283,6 +300,7 @@ export function TaskCommentThread({ comments, onReplyComment }: TaskCommentThrea
   const fileViewerOpen = useUIStore((s) => s.fileViewerOpen);
   const fileViewerFile = useUIStore((s) => s.fileViewerFile);
   const setSelectedText = useUIStore((s) => s.setSelectedText);
+  const showToast = useUIStore((s) => s.showToast);
 
   const handleOpenFileViewer = useCallback(
     (file: FileViewerItem) => {
@@ -317,6 +335,15 @@ export function TaskCommentThread({ comments, onReplyComment }: TaskCommentThrea
     [setSelectedText]
   );
 
+  const handleCopyComment = useCallback(async (comment: TaskComment) => {
+    try {
+      await navigator.clipboard.writeText(comment.text);
+      showToast(t('tasks.commentCopied'), 'info');
+    } catch {
+      showToast(t('tasks.commentCopyFailed'), 'error');
+    }
+  }, [showToast, t]);
+
   if (comments.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center" style={{color:'var(--c-text-3)',textAlign:'center',marginTop:8,marginBottom:8}}>
@@ -330,7 +357,7 @@ export function TaskCommentThread({ comments, onReplyComment }: TaskCommentThrea
 
   return (
     <>
-      <div id="task-comment-thread" className="ai-scroll flex-1 overflow-y-a" style={{display:'flex',flexDirection:'column',gap:16}}>
+      <div id="task-comment-thread" className="ai-scroll flex-1 overflow-y-a" style={{display:'flex',flexDirection:'column',gap:'var(--c-gap-3)'}}>
         {comments.map((comment) => (
           <CommentBubble
             key={comment.id}
@@ -347,6 +374,7 @@ export function TaskCommentThread({ comments, onReplyComment }: TaskCommentThrea
           y={contextMenu.y}
           comment={contextMenu.comment}
           onReply={() => onReplyComment?.(contextMenu.comment)}
+          onCopy={() => { void handleCopyComment(contextMenu.comment); }}
           onSendToAI={() => handleSendToAI(contextMenu.comment)}
           onDelete={() => deleteComment(contextMenu.comment.id, contextMenu.comment.taskId)}
           onClose={() => setContextMenu(null)}

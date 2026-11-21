@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Archive } from 'lucide-react';
 import { useTaskStore } from '../../stores/taskStore';
 import type { Task } from '../../types';
 import { useClientStore } from '../../stores/clientStore';
@@ -12,14 +13,14 @@ interface TaskListItemProps {
   task: Task;
   isActive: boolean;
   onClick: () => void;
+  onStatusAnnouncement?: (message: string) => void;
 }
 
-export function TaskListItem({ task, isActive, onClick }: TaskListItemProps) {
+export function TaskListItem({ task, isActive, onClick, onStatusAnnouncement }: TaskListItemProps) {
   const { t } = useTranslation();
   const updateTask = useTaskStore((state) => state.updateTask);
   const metaStyle = {
-    color: 'var(--c-text-3)',
-    fontSize: 'var(--fs-sm)',
+    fontSize: 'var(--fs-xs)',
   } as const;
   const { getProjectById } = useProjectStore();
   const { getClientById } = useClientStore();
@@ -58,7 +59,9 @@ export function TaskListItem({ task, isActive, onClick }: TaskListItemProps) {
         return;
       }
       setIsCelebrating(nextStatus === 'completed');
-      setAnnouncement(t(nextStatus === 'completed' ? 'tasks.taskCompleted' : 'tasks.taskReopened', { title: task.title }));
+      const message = t(nextStatus === 'completed' ? 'tasks.taskCompleted' : 'tasks.taskReopened', { title: task.title });
+      setAnnouncement(message);
+      onStatusAnnouncement?.(message);
     } catch {
       setStatusError(true);
     } finally {
@@ -104,16 +107,16 @@ export function TaskListItem({ task, isActive, onClick }: TaskListItemProps) {
           <div className="row-xs">
             <div className="flex items-center gap-1 min-w-0">
               {client && (
-                <div className="meta trunc" style={{ ...metaStyle, color: 'var(--c-text-3)', fontSize: 'var(--fs-xs)' }}>
+                <div className="meta trunc" style={metaStyle}>
                   {client.name} <span aria-hidden="true">/</span>
                 </div>
               )}
-              <span className="meta trunc" style={{ ...metaStyle, color: 'var(--c-text-3)', fontSize: 'var(--fs-xs)' }}>
+              <span className="meta trunc" style={metaStyle}>
                 {project?.name ?? 'Uncategorized'}
               </span>
             </div>
             <div className="task-item-due-date">
-              {!isCompleted && <span className="meta" style={{ ...metaStyle, fontSize: 'var(--fs-xs)' }}>{dateLabel}</span>}
+              <span className="meta" style={metaStyle}>{dateLabel}</span>
             </div>
           </div>
           <div className="task-title">{task.title}</div>
@@ -122,15 +125,15 @@ export function TaskListItem({ task, isActive, onClick }: TaskListItemProps) {
           type="button"
           className={`task-item-complete-overlay${isCompleted ? ' task-item-done-badge' : ''}`}
           aria-pressed={isCompleted}
-          aria-label={t(isCompleted ? 'tasks.reopenTask' : 'tasks.completeTask')}
-          title={t(isCompleted ? 'tasks.reopenTask' : 'tasks.completeTask')}
+          aria-label={t(isUpdating ? 'tasks.savingStatus' : isCompleted ? 'tasks.reopenTask' : 'tasks.completeTask')}
+          title={t(isUpdating ? 'tasks.savingStatus' : isCompleted ? 'tasks.reopenTask' : 'tasks.completeTask')}
           disabled={isUpdating}
           onClick={(event) => {
             event.stopPropagation();
             void changeStatus();
           }}
         >
-          {isUpdating ? t('tasks.savingStatus') : t('tasks.done')}
+          <Archive aria-hidden="true" />
         </button>
       </div>
       <span className="task-item-announcement" role="status" aria-live="polite" aria-atomic="true">

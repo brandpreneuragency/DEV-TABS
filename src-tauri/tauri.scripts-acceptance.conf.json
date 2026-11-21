@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "TABS Scripts Acceptance",
+  "identifier": "com.tabs.scripts.acceptance",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1421",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "windows": [{ "label": "main", "title": "TABS Scripts Acceptance — isolated test data", "create": false,
+      "url": "http://localhost:1421/scripts/scripts-acceptance.html",
+      "width": 1200, "height": 850, "center": true, "decorations": true, "dragDropEnabled": false }],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' http://localhost:1421 'unsafe-inline'; connect-src ipc: http://ipc.localhost http://localhost:1421 ws://localhost:1421; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; frame-src 'none'",
+      "capabilities": [{ "identifier": "scripts-acceptance", "windows": ["main"], "permissions": ["core:default"] }]
+    }
+  },
+  "plugins": { "updater": { "active": false, "endpoints": [] } },
+  "bundle": { "active": false, "createUpdaterArtifacts": false, "fileAssociations": [] }
+}

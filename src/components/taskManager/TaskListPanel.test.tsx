@@ -3,6 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskListPanel } from './TaskListPanel';
 import en from '../../i18n/en';
+import type { Task } from '../../types';
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -62,6 +63,7 @@ const projects = [
 let selectedClientId: string | null = 'c1';
 let selectedProjectId: string | null = null;
 let activeTaskPage: 'list' | 'calendar' | 'projects' = 'list';
+let currentTasks: Task[] = tasks;
 const openTaskInActiveTab = vi.fn();
 
 vi.mock('react-i18next', () => ({
@@ -96,14 +98,14 @@ vi.mock('./TaskListItem', () => ({
 vi.mock('../../stores/taskStore', () => {
   const useTaskStore = Object.assign(
     (selector?: (s: {
-      tasks: typeof tasks;
+      tasks: Task[];
       activeTaskId: string | null;
       selectedClientId: string | null;
       selectedProjectId: string | null;
       openTaskInActiveTab: typeof openTaskInActiveTab;
     }) => unknown) => {
       const state = {
-        tasks,
+        tasks: currentTasks,
         activeTaskId: null,
         selectedClientId,
         selectedProjectId,
@@ -131,7 +133,53 @@ describe('TaskListPanel', () => {
     selectedClientId = 'c1';
     selectedProjectId = null;
     activeTaskPage = 'list';
+    currentTasks = tasks;
     openTaskInActiveTab.mockReset();
+  });
+
+  it('separates completed tasks in the current scope and preserves the composer draft', async () => {
+    const user = userEvent.setup();
+    currentTasks = [
+      ...tasks,
+      { ...tasks[0], id: 'done', title: 'Completed task', status: 'completed' },
+      { ...tasks[2], id: 'other-done', title: 'Other completed task', status: 'completed' },
+      { ...tasks[0], id: 'deleted-done', title: 'Deleted task', status: 'completed', deletedAt: 10 },
+    ];
+    const view = render(<TaskListPanel />);
+    const composer = screen.getByRole('textbox', { name: 'Add a task' });
+    await user.type(composer, 'Draft');
+    expect(screen.getByTestId('task-done')).not.toBeVisible();
+    const toggle = screen.getByRole('button', { name: 'Show archived tasks' });
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('task-done')).toBeVisible();
+    expect(screen.getByTestId('task-t1')).not.toBeVisible();
+    expect(screen.queryByTestId('task-other-done')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('task-deleted-done')).not.toBeInTheDocument();
+    expect(composer).not.toBeVisible();
+    selectedProjectId = 'p-web';
+    view.rerender(<TaskListPanel />);
+    expect(screen.getByText('No archived tasks')).toBeVisible();
+    selectedProjectId = null;
+    view.rerender(<TaskListPanel />);
+    await user.click(toggle);
+    expect(composer).toBeVisible();
+    expect(composer).toHaveValue('Draft');
+  });
+
+  it('moves tasks between views when their status changes', async () => {
+    const user = userEvent.setup();
+    const view = render(<TaskListPanel />);
+    currentTasks = tasks.map((task) => task.id === 't1' ? { ...task, status: 'completed' } : task);
+    view.rerender(<TaskListPanel />);
+    expect(screen.getByTestId('task-t1')).not.toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Show archived tasks' }));
+    expect(screen.getByTestId('task-t1')).toBeVisible();
+    currentTasks = tasks;
+    view.rerender(<TaskListPanel />);
+    expect(screen.getByTestId('task-t1')).not.toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Show archived tasks' }));
+    expect(screen.getByTestId('task-t1')).toBeVisible();
   });
 
   it('shows legacy subtasks as standalone tasks in their project', () => {

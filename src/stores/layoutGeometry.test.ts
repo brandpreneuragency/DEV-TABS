@@ -45,10 +45,10 @@ describe('clampContextWidthPx', () => {
   });
 
   it('protects center min inside primary', () => {
-    // primary 900, handle 6, center 400 → max context 494, token max 420
+    // primary 900, handle 6, center 200 → max context 694, token max 420
     expect(clampContextWidthPx(500, 900, 6)).toBe(CONTEXT_MAX_PX);
-    // primary 700, handle 6 → max context 294
-    expect(clampContextWidthPx(400, 700, 6)).toBe(294);
+    // primary 500, handle 6 → max context 294
+    expect(clampContextWidthPx(400, 500, 6)).toBe(294);
   });
 
   it('does not exceed token max even when primary is wide', () => {
@@ -125,8 +125,8 @@ describe('contextWidthAfterAssistantResizePx', () => {
     expect(nextPrimary - innerHandle - nextContext).toBeGreaterThanOrEqual(CENTER_MIN_PX);
   });
 
-  it('pins center at 400px and gives remaining shrink to context', () => {
-    const tightPrimary = 750;
+  it('pins center at 200px and gives remaining shrink to context', () => {
+    const tightPrimary = 550;
     const nextPrimary = CONTEXT_MIN_PX + innerHandle + CENTER_MIN_PX;
     const nextContext = contextWidthAfterAssistantResizePx({
       startContextPx: startContext,

@@ -58,6 +58,22 @@ describe('TaskContextMenu', () => {
     createProject.mockReset();
   });
 
+  it('removes a task only after confirmation and preserves it on cancel', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<TaskContextMenu taskId="t1" x={0} y={0} onClose={onClose} />);
+
+    await user.click(screen.getByRole('button', { name: /Remove Task/ }));
+    expect(deleteTask).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(deleteTask).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /Remove Task/ }));
+    await user.click(screen.getByRole('button', { name: 'explorer.delete' }));
+    expect(deleteTask).toHaveBeenCalledOnce();
+    expect(deleteTask).toHaveBeenCalledWith('t1');
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it('lists only projects for the task’s current client', async () => {
     const user = userEvent.setup();
     render(<TaskContextMenu taskId="t1" x={0} y={0} onClose={() => undefined} />);

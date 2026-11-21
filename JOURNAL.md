@@ -1,0 +1,4 @@
+# TABS Journal
+
+- 2026-11-20 12:06 +03:00 | Codex | Added persistent account removal from Accounts and tray monitoring. All 81 account tests passed, scoped ESLint passed, and 25 account and test entry files typechecked with their dependencies. Project-wide typecheck reported TS2353 in the Memory Notes capture test. Installed desktop verification is open.
+- 2026-11-21 05:46 | OpenCode | Fixed stale chatContext.capture.test.ts (id-only MemoryChatContext), cleared 33.6GiB stale target cache left by the old MOTHER/DEV path, rebuilt v1.1.4 MSI+NSIS installers, silently replaced the installed app | typecheck PASS, focused vitest PASS, installer exit 0, installed tabs.exe 1.1.4 relaunched and Responding=True; updater .sig files not generated (TAURI_SIGNING_PRIVATE_KEY unset) | commit and push source, smoke-test installed app

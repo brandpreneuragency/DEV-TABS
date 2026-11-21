@@ -1,10 +1,9 @@
 import { useEffect, useState, type DragEvent } from 'react';
-import { Plus, Search, StickyNote, Tags } from 'lucide-react';
+import { Plus, Search, StickyNote } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNotesStore } from '../../stores/notesStore';
 import { noteText } from '../../types/notes';
 import { NoteCard } from './NoteCard';
-import { NotesCategoryManager } from './NotesCategoryManager';
 import { AssistantToggle } from '../layout/workspace/AssistantToggle';
 import './notes.css';
 
@@ -18,7 +17,6 @@ export function NotesPage() {
   const pinnedOnly = useNotesStore((state) => state.pinnedOnly);
   const isLoaded = useNotesStore((state) => state.isLoaded);
   const error = useNotesStore((state) => state.error);
-  const managerOpen = useNotesStore((state) => state.categoryManagerOpen);
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -63,8 +61,6 @@ export function NotesPage() {
           <input className="ui-input" type="search" aria-label={t('notes.search')} placeholder={t('notes.search')} value={search}
             onChange={(event) => setSearch(event.currentTarget.value)} /></label>
         <div className="notes-toolbar-actions">
-          <button type="button" className="ui-icon-button notes-icon-button" title={t('notes.manageCategories')} aria-label={t('notes.manageCategories')}
-            onClick={() => useNotesStore.getState().setCategoryManagerOpen(true)}><Tags /></button>
           <button type="button" className="ui-button ui-button--primary notes-button notes-button--primary" disabled={!isLoaded || creating} onClick={() => {
             if (creating) return;
             setCreating(true); setSearch('');
@@ -108,6 +104,5 @@ export function NotesPage() {
             if (target) reorder(card.id, target.id, direction > 0);
           }} />)}
       </div>}
-    {managerOpen && <NotesCategoryManager />}
   </section>;
 }

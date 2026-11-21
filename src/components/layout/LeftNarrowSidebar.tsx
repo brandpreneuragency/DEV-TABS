@@ -1,5 +1,5 @@
 import { Folder, Layers, ListX, Plus, Users, UserRoundMinus, X } from 'lucide-react';
-import { useLayoutEffect, useRef, useState, type DragEvent, type Ref } from 'react';
+import { useLayoutEffect, useRef, useState, type DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '../../stores/uiStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
@@ -7,16 +7,20 @@ import { useTaskStore } from '../../stores/taskStore';
 import { useClientStore } from '../../stores/clientStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { isNoClient } from '../../stores/clientOverview';
+import { nameKey } from '../../stores/taskTreeNames';
 import { TabBar } from '../header/TabBar';
 import { SETTINGS_HEADER_TABS } from '../header/moduleNav';
 import { AddNewClientButton } from '../taskManager/AddNewClientButton';
 import { AddNewProjectButton } from '../taskManager/AddNewProjectButton';
 import { NotesNavigation } from '../notes/NotesNavigation';
+import { MemoryNotesNavigation } from '../memoryNotes/MemoryNotesNavigation';
+import { ProviderAccountsNavigation } from '../providerAccounts/ProviderAccountsNavigation';
+import { ScriptsNavigation } from '../scripts/ScriptsNavigation';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { TaskClientIcon } from './TaskClientIcon';
 
-export function LeftNarrowSidebar({ githubNavigationRef }: { githubNavigationRef?: Ref<HTMLDivElement> }) {
+export function LeftNarrowSidebar() {
   const { t } = useTranslation();
-  const githubMode = useUIStore((state) => state.githubMode);
   const taskMode = useUIStore((state) => state.taskMode);
   const crmMode = useUIStore((state) => state.crmMode);
   const activeView = useUIStore((state) => state.activeView);
@@ -46,6 +50,9 @@ export function LeftNarrowSidebar({ githubNavigationRef }: { githubNavigationRef
   const [draggedClientId, setDraggedClientId] = useState<string | null>(null);
   const [clientDropTarget, setClientDropTarget] = useState<{ id: string; after: boolean } | null>(null);
   const projects = useProjectStore((state) => state.projects);
+  const tasks = useTaskStore((state) => state.tasks);
+  const populatedProjectIds = new Set(tasks.filter((task) => !task.deletedAt).map((task) => task.projectId));
+  const activeProjectIds = new Set(tasks.filter((task) => !task.deletedAt && task.status !== 'completed').map((task) => task.projectId));
   const reorderProject = useProjectStore((state) => state.reorderProject);
   const [draggedProject, setDraggedProject] = useState<{ id: string; clientId: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; after: boolean } | null>(null);
@@ -54,7 +61,7 @@ export function LeftNarrowSidebar({ githubNavigationRef }: { githubNavigationRef
   const setSelection = useTaskStore((state) => state.setSelection);
   const noClient = clients.find(isNoClient);
   const settings = !taskMode && !crmMode && activeView === 'settings';
-  const clientsPage = crmMode && crmPage === 'clients';
+  const clientsPage = crmMode && (crmPage === 'clients' || crmPage === 'projects');
   const scopes = [
     { id: null, name: t('navigation.everything'), icon: Layers },
     { id: noClient?.id ?? '__no-client__', name: t(clientsPage ? 'clients.noClientScope' : 'navigation.noClient'), icon: UserRoundMinus },
@@ -109,21 +116,21 @@ export function LeftNarrowSidebar({ githubNavigationRef }: { githubNavigationRef
     },
   });
 
-  if (githubMode) {
-    return <nav id="nav-bar" className="nav-bar scope-navigation" aria-label={t('github.repositories')}>
-      <div ref={githubNavigationRef} className="github-navigation-slot" />
-    </nav>;
-  }
-
   if (!taskMode && !crmMode && activeView === 'notes') {
     return <nav id="nav-bar" className="nav-bar scope-navigation" aria-label={t('navigation.notes')}><NotesNavigation /></nav>;
   }
 
+  if (!taskMode && !crmMode && activeView === 'scripts') {
+    return <nav id="nav-bar" className="nav-bar scope-navigation" aria-label={t('scripts.title')}><ScriptsNavigation /></nav>;
+  }
+
+  if (!taskMode && !crmMode && activeView === 'memory') {
+    return <nav id="nav-bar" className="nav-bar scope-navigation" aria-label={t('navigation.memory')}><MemoryNotesNavigation /></nav>;
+  }
+
   if (!taskMode && !crmMode && activeView === 'providerAccounts') {
     return <nav id="nav-bar" className="nav-bar scope-navigation" aria-label={t('navigation.providerAccounts')}>
-      <div className="scope-tabs"><button type="button" className="scope-tab" aria-current="page">
-        <Layers /><span>{t('providerAccounts.dashboard')}</span>
-      </button></div>
+      <ProviderAccountsNavigation />
     </nav>;
   }
 
@@ -171,15 +178,15 @@ export function LeftNarrowSidebar({ githubNavigationRef }: { githubNavigationRef
               <section key={client.id} className="scope-project-group" aria-label={client.name}
                 {...clientDropHandlers(client.id)}>
                 <AddNewProjectButton clientId={client.id} inlineGroupLabel={client.name}
+                  inlineGroupIcon={<TaskClientIcon clientId={client.id} name={client.name} />}
                   inlineGroupLabelProps={{ draggable: true,
-                    onDragStart: (event) => startClientDrag(event, client.id), onDragEnd: endClientDrag }}
+                    onDragStart: (event) => startClientDrag(event, client.id), onDragEnd: endClientDrag,
+                    'aria-current': selectedClientId === client.id && !selectedProjectId ? 'page' : undefined,
+                    onClick: () => setSelection(client.id, null) }}
                   onCreated={(project) => setSelection(client.id, project.id)}>
-                <button type="button" className="scope-tab scope-project-all"
-                  aria-current={selectedClientId === client.id && !selectedProjectId ? 'page' : undefined}
-                  onClick={() => setSelection(client.id, null)}>
-                  <Layers size={14} /><span>{t('navigation.all')}</span>
-                </button>
-                {projects.filter((project) => project.clientId === client.id)
+                {projects.filter((project) => project.clientId === client.id
+                  && (activeProjectIds.has(project.id)
+                    || (nameKey(project.name) !== 'general' && !populatedProjectIds.has(project.id))))
                   .sort((left, right) => left.order - right.order).map((project) => (
                     <button key={project.id} type="button" className="scope-tab"
                       draggable
@@ -209,7 +216,7 @@ export function LeftNarrowSidebar({ githubNavigationRef }: { githubNavigationRef
                       }}
                       title={project.name} aria-current={selectedProjectId === project.id ? 'page' : undefined}
                       onClick={() => setSelection(client.id, project.id)}>
-                      <Folder size={14} /><span>{project.name}</span>
+                      <span>{project.name}</span>
                     </button>
                   ))}
                 </AddNewProjectButton>

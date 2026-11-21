@@ -79,8 +79,8 @@ describe('TaskListItem', () => {
     const onClick = vi.fn();
     const { container } = render(<TaskListItem task={makeTask()} isActive={false} onClick={onClick} />);
     const doneButton = screen.getByRole('button', { name: 'Mark as completed' });
-    expect(doneButton).toHaveTextContent('Done');
-    expect(doneButton.querySelector('svg')).toBeNull();
+    expect(doneButton.textContent).toBe('');
+    expect(doneButton.querySelector('svg.lucide-archive')).toBeInTheDocument();
     await user.click(doneButton);
     expect(updateTask).toHaveBeenCalledExactlyOnceWith('t1', { status: 'completed' });
     expect(onClick).not.toHaveBeenCalled();
@@ -101,15 +101,14 @@ describe('TaskListItem', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
-  it('uses a single text-only Done toggle on completed cards', () => {
+  it('uses an archive icon toggle on completed cards', () => {
     const { container } = render(<TaskListItem task={makeTask({ status: 'completed' })} isActive={false} onClick={() => undefined} />);
     expect(screen.queryByRole('button', { name: 'Mark as completed' })).not.toBeInTheDocument();
     expect(container.querySelector('.task-card')).toHaveClass('task-card--completed');
-    expect(screen.getAllByText('Done')).toHaveLength(1);
     const doneButton = screen.getByRole('button', { name: 'Mark as incomplete' });
-    expect(doneButton).toHaveTextContent('Done');
     expect(doneButton).toHaveAttribute('aria-pressed', 'true');
-    expect(doneButton.querySelector('svg')).toBeNull();
+    expect(doneButton.querySelector('svg.lucide-archive')).toBeInTheDocument();
+    expect(container.querySelector('.task-item-due-date')).toHaveTextContent('14.Eyl');
     expect(screen.queryByText('Undo')).not.toBeInTheDocument();
   });
 
@@ -123,7 +122,7 @@ describe('TaskListItem', () => {
     const doneButton = screen.getByRole('button', { name: 'Mark as completed' });
     await user.click(doneButton);
     expect(doneButton).toBeDisabled();
-    expect(doneButton).toHaveTextContent('Saving...');
+    expect(doneButton).toHaveAccessibleName('Saving...');
     view.rerender(<TaskListItem task={makeTask({ status: 'completed' })} isActive={false} onClick={() => undefined} />);
     expect(view.container.querySelector('.task-card--celebrating')).toBeNull();
     await user.click(doneButton);

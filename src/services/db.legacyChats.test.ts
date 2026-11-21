@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { db } from './db';
 
 describe('historic chat upgrades', () => {
-  it('preserves v6 message IDs, content, binding, and time through v18', async () => {
+  it('resets v6 legacy chats but preserves the original document through the OpenCode upgrade', async () => {
     await db.delete();
     const old = new Dexie('ZenEditorDB');
     old.version(6).stores({
@@ -33,15 +33,8 @@ describe('historic chat upgrades', () => {
     old.close();
 
     await db.open();
-    const rows = await db.chatMessages.orderBy('timestamp').toArray();
-    expect(rows.map((row) => [row.id, row.content, row.timestamp, row.documentId])).toEqual([
-      ['old-user', 'First question', 101, 'doc-1'],
-      ['old-answer', 'Preserved answer', 102, 'doc-1'],
-    ]);
-    expect(rows.every((row) => row.threadId === 'legacy-document:doc-1')).toBe(true);
-    const thread = await db.chatThreads.get('legacy-document:doc-1');
-    expect(thread).toMatchObject({ origin: 'legacy_api', mode: 'writer',
-      documentId: 'doc-1', createdAt: 101, updatedAt: 102 });
+    expect(await db.chatMessages.count()).toBe(0);
+    expect(await db.chatThreads.get('legacy-document:doc-1')).toBeUndefined();
     expect(await db.table('documents').get('doc-1')).toMatchObject({
       title: 'Historic draft', content: 'Preserved document body',
     });

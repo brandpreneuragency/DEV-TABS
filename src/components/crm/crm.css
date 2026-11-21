@@ -638,11 +638,12 @@
   content: '';
   width: 8px;
   height: 2px;
-  border-top: 1px solid var(--c-border-2);
-  border-bottom: 1px solid var(--c-border-2);
-  opacity: 0.6;
+  border-top: 1px solid var(--c-border-0);
+  border-bottom: 1px solid var(--c-border-0);
+  opacity: 1;
 }
 #crm-note-card .composer-resize-handle:hover::before {
+  border-color: var(--c-border-2);
   opacity: 1;
 }
 #crm-note-card .task-comment-bottom-row {

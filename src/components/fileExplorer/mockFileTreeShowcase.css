@@ -1,3 +1,13 @@
+#mock-filetree-showcase .mock-filetree-node:not(.is-selected),
+#mock-filetree-showcase .mock-filetree-node:not(.is-selected) > .row-xs {
+  background-color: var(--c-background-0);
+}
+
+#mock-filetree-showcase .mock-filetree-node:not(.is-selected):hover,
+#mock-filetree-showcase .mock-filetree-node:not(.is-selected) > .row-xs:hover {
+  background-color: transparent;
+}
+
 .tree-node > .row-xs:hover .ui-icon,
 .tree-node > .row-xs:hover .trunc,
 #mock-filetree-showcase .row-xs:hover .ui-icon,

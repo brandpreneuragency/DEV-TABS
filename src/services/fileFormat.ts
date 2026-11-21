@@ -1,8 +1,29 @@
 import { serializeMdString } from './export';
 
-export const SUPPORTED_EXTENSIONS = ['md', 'markdown', 'txt', 'doc', 'json', 'mjs', 'cjs', 'js', 'ts', 'tsx', 'jsx', 'env', 'local', 'gitignore', 'yaml', 'yml', 'toml', 'html', 'htm', 'css', 'scss', 'xml', 'csv'];
+export const SUPPORTED_EXTENSIONS = ['md', 'markdown', 'txt', 'doc', 'json', 'mjs', 'cjs', 'js', 'ts', 'tsx', 'jsx', 'env', 'local', 'gitignore', 'yaml', 'yml', 'toml', 'html', 'htm', 'css', 'scss', 'xml', 'csv', 'sh', 'bash', 'zsh', 'py', 'rb', 'go', 'rs', 'java', 'cpp', 'c', 'h', 'hpp'];
 
-export const TEXT_AS_IS_EXTENSIONS = new Set(['mjs', 'cjs', 'js', 'ts', 'tsx', 'jsx', 'env', 'local', 'gitignore', 'yaml', 'yml', 'toml', 'html', 'htm', 'css', 'scss', 'xml', 'csv']);
+export const TEXT_AS_IS_EXTENSIONS = new Set(SUPPORTED_EXTENSIONS.filter((ext) => !['md', 'markdown', 'txt', 'doc', 'json'].includes(ext)));
+
+// Retained in editor JSON/cache, never written into a source file.
+export const TEXT_FILE_ATTRIBUTE = 'tabsTextFile';
+
+interface FileDocumentNode {
+  type?: string;
+  text?: string;
+  content?: FileDocumentNode[];
+  attrs?: Record<string, unknown>;
+}
+
+export function isTextFileDocument(document: { attrs?: Record<string, unknown> }): boolean {
+  return document.attrs?.[TEXT_FILE_ATTRIBUTE] === true;
+}
+
+function nodeText(node: FileDocumentNode, blockSeparator: string): string {
+  if (node.type === 'text') return node.text ?? '';
+  if (node.type === 'hardBreak') return '\n';
+  const inline = ['paragraph', 'heading', 'codeBlock'].includes(node.type ?? '');
+  return (node.content ?? []).map((child) => nodeText(child, blockSeparator)).join(inline ? '' : blockSeparator);
+}
 
 function mdNodeFromLines(lines: string[]): object[] {
   const nodes: object[] = [];
@@ -97,17 +118,25 @@ export function parseMarkdown(text: string): object {
   return { type: 'doc', content: content.length > 0 ? content : [{ type: 'paragraph' }] };
 }
 
-export function parseTxt(text: string): object {
-  const blocks = text.split(/\n\n+/).filter((b) => b.trim());
-  const content = blocks.length > 0
-    ? blocks.map((block) => ({ type: 'paragraph', content: [{ type: 'text', text: block.replace(/\n/g, ' ').trim() }] }))
-    : [{ type: 'paragraph' }];
-  return { type: 'doc', content };
+export function parseTxt(text: string, language: string | null = null): object {
+  return {
+    type: 'doc',
+    attrs: { [TEXT_FILE_ATTRIBUTE]: true },
+    content: [{
+      type: 'codeBlock',
+      attrs: { language },
+      ...(text ? { content: [{ type: 'text', text }] } : {}),
+    }],
+  };
 }
 
 export function parseJson(text: string): object {
-  const result = JSON.parse(text);
-  if (result?.type === 'doc') return result;
+  const result: unknown = JSON.parse(text);
+  if (result && typeof result === 'object' && 'type' in result && result.type === 'doc'
+    && 'content' in result && Array.isArray(result.content)
+    && Object.keys(result).every((key) => ['type', 'attrs', 'content'].includes(key))) {
+    return result;
+  }
   throw new Error('Not a valid TipTap document');
 }
 
@@ -115,19 +144,26 @@ export function parseByExt(text: string, ext: string): object {
   if (ext === 'md' || ext === 'markdown') return parseMarkdown(text);
   if (ext === 'txt' || ext === 'doc') return parseTxt(text);
   if (ext === 'json') {
-    try { return parseJson(text); } catch { return parseTxt(text); }
+    try { return parseJson(text); } catch { return parseTxt(text, 'json'); }
   }
-  if (TEXT_AS_IS_EXTENSIONS.has(ext)) return parseTxt(text);
+  if (TEXT_AS_IS_EXTENSIONS.has(ext)) return parseTxt(text, ext);
   throw new Error(`Unsupported extension: ${ext}`);
 }
 
 export function serialize(json: object, ext: string): string {
   if (ext === 'md' || ext === 'markdown') return serializeMdString(JSON.stringify(json));
-  if (ext === 'txt' || ext === 'doc') {
-    const doc = json as { content?: Array<{ content?: Array<{ text?: string }> }> };
-    return (doc.content ?? [])
-      .map((n) => (n.content ?? []).map((c) => c.text ?? '').join(''))
-      .join('\n\n');
+  const doc = json as FileDocumentNode;
+  if (ext === 'txt' || ext === 'doc' || TEXT_AS_IS_EXTENSIONS.has(ext)
+    || (ext === 'json' && isTextFileDocument(doc))) {
+    return nodeText(doc, isTextFileDocument(doc) ? '\n' : '\n\n');
+  }
+  if (doc.attrs && TEXT_FILE_ATTRIBUTE in doc.attrs) {
+    const attrs = { ...doc.attrs };
+    delete attrs[TEXT_FILE_ATTRIBUTE];
+    const saved = { ...doc };
+    if (Object.keys(attrs).length > 0) saved.attrs = attrs;
+    else delete saved.attrs;
+    return JSON.stringify(saved, null, 2);
   }
   return JSON.stringify(json, null, 2);
 }

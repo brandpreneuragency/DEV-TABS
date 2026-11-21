@@ -2,6 +2,23 @@
    Composer.tsx / AttachmentPreview.tsx so every surface (chat, comments,
    CRM notes) matches even when panel-specific CSS is not loaded. */
 
+/* Keep tertiary composer colors in sync while any control has focus. */
+.composer-card:focus-within {
+  --c-text-3: var(--c-text-2);
+}
+
+/* Recolor an existing card border without adding one to borderless composers. */
+:root :is(#chat-input-card, #task-comment-card, #crm-note-card, .composer-card):focus-within,
+:root :is(#task-quick-create, #subtask-quick-create) .composer-card:focus-within {
+  border-color: var(--c-border-2);
+}
+
+/* The resize grip is drawn with borders rather than its text color. */
+:root :is(#chat-input-card, #task-comment-card, #crm-note-card):focus-within .composer-resize-handle::before {
+  border-color: var(--c-text-2);
+  opacity: 1;
+}
+
 .composer-input {
   font-size: var(--fs-sm);
   color: var(--c-text-1);

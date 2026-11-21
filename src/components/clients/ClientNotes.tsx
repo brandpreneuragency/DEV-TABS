@@ -17,6 +17,7 @@ interface ClientNotesProps {
   clientId: string | null;
   records: ClientRecordsAdapter;
   database: TabsDB;
+  focusNoteId?: string;
 }
 
 type NoteKindFilter = 'all' | ClientNote['kind'];
@@ -34,8 +35,10 @@ type EditRetry = { kind: 'draft'; draftId: string } | { kind: 'note'; note: Clie
 
 const PAGE_SIZE = 50;
 
-export function ClientNotes({ clientId, records, database }: ClientNotesProps) {
-  const { t } = useTranslation();
+export function ClientNotes({ clientId, records, database, focusNoteId }: ClientNotesProps) {
+  const { t, i18n } = useTranslation();
+  const noteListRef = useRef<HTMLDivElement>(null);
+  const focusedNoteRef = useRef('');
   const clients = useClientStore((state) => state.clients);
   const selectedClient = clients.find((client) => client.id === clientId) ?? null;
   const [query, setQuery] = useState('');
@@ -124,7 +127,18 @@ export function ClientNotes({ clientId, records, database }: ClientNotesProps) {
     ? visibleState.notes.filter((note) => (kindFilter === 'all' || note.kind === kindFilter)
       && (!pinnedOnly || note.pinned))
     : [];
-  const displayedNotes = notes.slice(0, limit);
+  const focusedIndex = focusNoteId ? notes.findIndex((note) => note.id === focusNoteId) : -1;
+  const displayedNotes = notes.slice(0, Math.max(limit, focusedIndex + 1));
+  useEffect(() => {
+    const key = JSON.stringify([clientId, focusNoteId]);
+    if (!focusNoteId || focusedNoteRef.current === key) return;
+    const target = Array.from(noteListRef.current?.querySelectorAll<HTMLElement>('[data-note-id]') ?? [])
+      .find((element) => element.dataset.noteId === focusNoteId);
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView?.({ block: 'nearest' });
+    focusedNoteRef.current = key;
+  }, [clientId, focusNoteId, displayedNotes]);
   const dataClients = visibleState.status === 'ready' ? visibleState.clients : clients;
   const profiles = visibleState.status === 'ready' ? visibleState.profiles : [];
   const drafts = visibleState.status === 'ready' ? visibleState.drafts : [];
@@ -281,7 +295,7 @@ export function ClientNotes({ clientId, records, database }: ClientNotesProps) {
           {liveBrands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
         </select>
       </label>}
-      <button type="button" className="ui-button clients-button ui-button--primary clients-button--primary" onClick={() => startCreate(Date.now())}>{t('clients.addNote')}</button>
+      <button type="button" className="ui-button clients-button" onClick={() => startCreate(Date.now())}>{t('clients.addNote')}</button>
       {createTargetError && <p role="alert" className="clients-error">{t('clients.selectBrandToCreate')}</p>}
     </div>}
 
@@ -320,7 +334,7 @@ export function ClientNotes({ clientId, records, database }: ClientNotesProps) {
       <p className="clients-empty-state" role="status">{clientId !== null && !showArchived && !showTrash
         ? t('clients.noNotesForClient') : t('clients.noNotes')}</p>}
 
-    {visibleState.status === 'ready' && displayedNotes.length > 0 && <div className="clients-note-list">
+    {visibleState.status === 'ready' && displayedNotes.length > 0 && <div className="clients-note-list" ref={noteListRef}>
       {displayedNotes.map((note) => {
         const ownerName = getClientName(note);
         const archivedNote = !dataClients.some((client) => client.id === note.clientId);
@@ -329,12 +343,12 @@ export function ClientNotes({ clientId, records, database }: ClientNotesProps) {
         const failedAction = actionFailure?.note.id === note.id ? actionFailure : null;
         const happenedAt = new Date(note.occurredAt);
         const dateValue = Number.isNaN(happenedAt.getTime()) ? undefined : happenedAt.toISOString();
-        const dateLabel = Number.isNaN(happenedAt.getTime()) ? '' : happenedAt.toLocaleString('tr-TR');
+        const dateLabel = Number.isNaN(happenedAt.getTime()) ? '' : happenedAt.toLocaleString(i18n.language);
         const kindLabels: Record<ClientNote['kind'], string> = {
           call: t('clients.kindCall'), meeting: t('clients.kindMeeting'),
           decision: t('clients.kindDecision'), note: t('clients.kindNote'),
         };
-        return <article className="ui-card clients-note-card" key={note.id} data-note-id={note.id}
+        return <article className="ui-card clients-note-card" key={note.id} data-note-id={note.id} tabIndex={-1}
           aria-label={note.title || t('clients.untitledNote')}>
           <div className="clients-note-heading">
             <div>

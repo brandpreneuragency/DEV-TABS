@@ -6,13 +6,11 @@ import { useKanbanDropIndicator } from '../../hooks/useKanbanDropIndicator';
 import { sortKanbanCards } from '../../services/kanbanOrder';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTaskStore } from '../../stores/taskStore';
-import { useUIStore } from '../../stores/uiStore';
 import { filterTasksForSelection } from '../../stores/taskSelection';
 import { TaskKanbanCard } from './TaskProjectsKanban';
 import { TaskCalendarDatePicker } from './TaskCalendarDatePicker';
 import { TaskQuickCreate } from './TaskQuickCreate';
 import { formatTurkishClock } from './formatTurkishClock';
-import { AssistantToggle } from '../layout/workspace/AssistantToggle';
 import './taskCalendar.css';
 
 interface TaskCalendarViewProps {
@@ -33,7 +31,6 @@ export function TaskCalendarView({ tasks }: TaskCalendarViewProps) {
   const selectedProjectId = useTaskStore((state) => state.selectedProjectId);
   const updateTask = useTaskStore((state) => state.updateTask);
   const openTask = useTaskStore((state) => state.openTaskInActiveTab);
-  const setActiveTaskPage = useUIStore((state) => state.setActiveTaskPage);
   const projects = useProjectStore((state) => state.projects);
   const [anchor, setAnchor] = useState(() => new Date());
   const [today, setToday] = useState(() => new Date());
@@ -90,7 +87,6 @@ export function TaskCalendarView({ tasks }: TaskCalendarViewProps) {
           <div className="task-calendar-switch" role="group" aria-label={t('calendar.view')}>
             {(['week', 'month'] as const).map((mode) => <button className="ui-button" key={mode} type="button" aria-pressed={view === mode} onClick={() => setView(mode)}>{t(`calendar.${mode}`)}</button>)}
           </div>
-          <AssistantToggle id="task-calendar-btn-assistant" variant="header" />
         </div>
       </div>
       {error && <div role="alert">{t('calendar.moveFailed')}</div>}
@@ -106,7 +102,7 @@ export function TaskCalendarView({ tasks }: TaskCalendarViewProps) {
                 void updateTask(id, { date: key }, { field: 'date', beforeId }).catch(() => setError(true));
               })}>
               <div className="crm-kanban-column-header">
-                <span className="task-calendar-day-label"><span>{format(day, { weekday: 'short' })}</span><strong>{day.getDate()}</strong></span>
+                <span className="task-calendar-day-label"><span>{format(day, { weekday: 'short' })}</span><strong>{day.getDate()}</strong><span>{format(day, { month: 'short' })}</span></span>
                 <button
                   type="button"
                   className="ui-icon-button"
@@ -129,7 +125,7 @@ export function TaskCalendarView({ tasks }: TaskCalendarViewProps) {
               <div className="crm-kanban-column-body">
                 {drop.indicator(key)}
                 {!dayTasks.length && <div className="crm-kanban-column-empty">{t('navigation.noTasks')}</div>}
-                {dayTasks.map((task) => <TaskKanbanCard key={task.id} task={task} isActive={task.id === activeTaskId} dragLabel={t('calendar.reschedule')} showActions onClick={(id) => { openTask(id); setActiveTaskPage('list'); }} />)}
+                {dayTasks.map((task) => <TaskKanbanCard key={task.id} task={task} isActive={task.id === activeTaskId} dragLabel={t('calendar.reschedule')} showActions onClick={openTask} />)}
               </div>
             </section>
           );

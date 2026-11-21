@@ -23,11 +23,15 @@ mod codex;
 #[cfg(not(any(feature = "clients-acceptance", feature = "tasks-acceptance")))]
 mod commands;
 #[cfg(not(any(feature = "clients-acceptance", feature = "tasks-acceptance")))]
-mod github;
+mod open_code;
 #[cfg(not(any(feature = "clients-acceptance", feature = "tasks-acceptance")))]
 mod provider_accounts;
 #[cfg(not(any(feature = "clients-acceptance", feature = "tasks-acceptance")))]
 mod provider_connections;
+#[cfg(not(any(feature = "clients-acceptance", feature = "tasks-acceptance")))]
+mod scripts;
+#[cfg(not(any(feature = "clients-acceptance", feature = "tasks-acceptance")))]
+mod tab_bridge;
 #[cfg(not(any(feature = "clients-acceptance", feature = "tasks-acceptance")))]
 mod terminal;
 #[cfg(not(any(feature = "clients-acceptance", feature = "tasks-acceptance")))]
@@ -153,9 +157,6 @@ fn run_production() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(terminal::TerminalRegistry::new())
-        .manage(std::sync::Arc::new(
-            cli_providers::runs::RunRegistry::default(),
-        ))
         .manage(PendingOpenFile(Mutex::new(None)))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -173,95 +174,68 @@ fn run_production() {
             task_authority::task_authority_backup,
             test_notification,
             take_pending_open_file,
+            tray::tray_popup_ready,
+            tray::tray_popup_hide,
             commands::secrets::legacy_ai_preference,
             commands::secrets::legacy_ai_cleanup,
-            commands::github::github_credential_status,
-            commands::github::github_credential_put,
-            commands::github::github_credential_delete,
-            commands::github::github_transport_request,
-            commands::github::github_session_generation,
-            commands::github::github_allocate_write_authority,
-            commands::github::github_current_write_authority,
-            commands::github::github_note_write_epoch,
-            commands::github::github_device_start,
-            commands::github::github_device_poll,
-            commands::github::github_device_cancel,
-            commands::github::github_auth_probe_pending,
-            commands::github::github_auth_commit_pending,
-            commands::github::github_auth_discard_pending,
-            commands::github::github_auth_has_access,
-            commands::github::github_auth_logout,
-            commands::github::github_auth_refresh,
-            commands::github::github_cache_seal,
-            commands::github::github_cache_open,
-            commands::github::github_open_device_login,
             commands::terminal::terminal_create,
             commands::terminal::terminal_write,
             commands::terminal::terminal_resize,
             commands::terminal::terminal_kill,
             commands::terminal::terminal_list,
             commands::terminal::home_dir,
-            commands::codex::codex_discover,
+            commands::scripts::scripts_snapshot,
+            commands::scripts::scripts_save,
+            commands::scripts::scripts_duplicate,
+            commands::scripts::scripts_delete,
+            commands::scripts::scripts_start,
+            commands::scripts::scripts_cancel,
+            commands::scripts::scripts_output,
             provider_accounts::provider_accounts_list,
             provider_accounts::provider_accounts_refresh,
+            provider_accounts::provider_accounts_connect_api_key,
             provider_accounts::provider_accounts_begin_login,
             provider_accounts::provider_accounts_poll_login,
             provider_accounts::provider_accounts_cancel_login,
             provider_accounts::provider_accounts_open_login,
+            provider_accounts::provider_accounts_open_usage,
             provider_connections::provider_connections_refresh,
-            commands::codex::codex_connect,
-            commands::codex::codex_begin_login,
-            commands::codex::codex_cancel_login,
-            commands::codex::codex_status,
-            commands::codex::codex_list_models,
-            commands::codex::codex_default_workspace,
             commands::codex::codex_read_scoped_text_file,
             commands::codex::codex_list_scoped_documents,
             commands::codex::codex_scoped_document_hash,
             commands::codex::codex_create_scoped_document,
-            commands::codex::codex_read_thread,
-            commands::codex::codex_start_thread,
-            commands::codex::codex_resume_thread,
-            commands::codex::codex_start_turn,
-            commands::codex::codex_interrupt_turn,
-            commands::codex::codex_reply_request,
-            commands::codex::codex_replay_events,
-            commands::codex::codex_ack_events,
-            commands::codex::codex_disconnect,
             commands::cli_providers::cli_provider_probe,
             commands::cli_providers::cli_provider_default_workspace,
-            commands::cli_runs::cli_provider_run,
-            commands::cli_runs::cli_provider_stop,
+            commands::open_code::open_code_status,
+            commands::open_code::open_code_discover,
+            commands::open_code::open_code_list_models,
+            commands::open_code::open_code_list_agents,
+            commands::open_code::open_code_create_session,
+            commands::open_code::open_code_rebind_sessions,
+            commands::open_code::open_code_get_session,
+            commands::open_code::open_code_get_messages,
+            commands::open_code::open_code_prompt,
+            commands::open_code::open_code_interrupt,
+            commands::open_code::open_code_switch_model,
+            commands::open_code::open_code_switch_agent,
+            commands::open_code::open_code_list_forms,
+            commands::open_code::open_code_reply_form,
+            commands::open_code::open_code_list_permissions,
+            commands::open_code::open_code_reply_permission,
+            commands::open_code::open_code_delete_session,
+            commands::open_code::open_code_subscribe,
+            commands::open_code::open_code_unsubscribe,
+            commands::open_code::open_code_tool_start,
+            commands::open_code::open_code_tool_bind,
+            commands::open_code::open_code_tool_complete,
+            commands::open_code::open_code_tool_validate,
+            commands::open_code::open_code_tool_stop,
         ])
         .setup(|app| {
-            let event_window = app.get_webview_window("main").ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "TABS main window is unavailable",
-                )
-            })?;
-            let mut protected_roots = vec![
-                app.path().app_data_dir()?,
-                app.path().app_local_data_dir()?,
-                app.path().app_config_dir()?,
-            ];
-            let codex_home = std::env::var_os("CODEX_HOME")
-                .map(std::path::PathBuf::from)
-                .or_else(|| {
-                    std::env::var_os("USERPROFILE")
-                        .map(|profile| std::path::PathBuf::from(profile).join(".codex"))
-                });
-            if let Some(path) = codex_home {
-                protected_roots.push(path);
-            }
-            let journal_dir = app.path().app_local_data_dir()?.join("codex-event-journal");
-            app.manage(std::sync::Arc::new(
-                codex::CodexHost::new(move |event| {
-                    let _ = event_window.emit("codex://event", event);
-                })
-                .with_protected_roots(protected_roots)
-                .with_journal(&journal_dir),
-            ));
+            app.manage(std::sync::Arc::new(scripts::ScriptsHost::new(
+                app.path().app_local_data_dir()?.join("scripts"),
+            )));
+            app.manage(commands::open_code::create_host(app.handle())?);
             // Intercept the main window's close button: instead of quitting
             // the app, hide the window so the tray icon remains usable.
             // The user can quit from the tray's "Quit" menu item, or by
@@ -304,6 +278,16 @@ fn run_production() {
 
             Ok(())
         })
-        .run(context)
-        .expect("error while running tauri application");
+        .build(context)
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                if let Some(host) = app.try_state::<std::sync::Arc<scripts::ScriptsHost>>() {
+                    host.shutdown();
+                }
+                if let Some(host) = app.try_state::<std::sync::Arc<open_code::Host>>() {
+                    host.shutdown();
+                }
+            }
+        });
 }

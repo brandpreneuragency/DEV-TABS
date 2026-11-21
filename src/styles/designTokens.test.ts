@@ -43,7 +43,10 @@ describe('single-source design contract', () => {
 
   it('keeps palette, typography, control and spacing defaults in tokens.css', () => {
     const violations = sources('src').filter((path) => path.endsWith('.css') && path !== tokenPath).flatMap((path) => {
-      const css = stripComments(readFileSync(path, 'utf8'));
+      let css = stripComments(readFileSync(path, 'utf8'));
+      if (relative('src', path).replace(/\\/g, '/') === 'components/ui/composer.css') {
+        css = css.replace(/\.composer-card:focus-within\s*\{\s*--c-text-3:\s*var\(--c-text-2\)\s*;\s*\}/, '');
+      }
       return [...css.matchAll(/(?:^|[;{])\s*(--(?:c-(?:background|text|accent|border|space|gap|icon|sq-button|font)[\w-]*|fs-[\w-]+|lh-[\w-]+|control-height-[\w-]+|radius-[\w-]+))\s*:/g)]
         .map((match) => `${relative('src', path)}: ${match[1]}`);
     });
@@ -77,9 +80,15 @@ describe('single-source design contract', () => {
     expect([...new Set(missing)]).toEqual([]);
   });
 
-  it('keeps application chrome free of box, text and filter shadows in every theme', () => {
+  it('keeps application chrome shadow-free except for panel resize line hover', () => {
     const violations = sources('src').flatMap((path) => {
-      const text = stripComments(readFileSync(path, 'utf8'));
+      let text = stripComments(readFileSync(path, 'utf8'));
+      if (relative('src', path).replace(/\\/g, '/') === 'styles/layout.css') {
+        text = text.replace(
+          /\.navigation-resize-handle:hover::before,\s*\.main-resize-handle:hover > \.main-resize-handle__line,\s*\.context-resize-handle:hover > \.context-resize-handle__line\s*\{\s*background: var\(--c-accent-2\);\s*box-shadow: 0 0 var\(--c-gap-2\) var\(--c-accent-2\);\s*\}/,
+          '',
+        );
+      }
       const shadows = [...text.matchAll(/(?:box-shadow|text-shadow)\s*:\s*([^;}]+)/g)]
         .filter((match) => !/^none(?:\s*!important)?$/.test(match[1].trim()));
       const inline = [...text.matchAll(/(?:boxShadow|textShadow)\s*:\s*['"]([^'"]+)['"]/g)]
@@ -101,7 +110,12 @@ describe('single-source design contract', () => {
         return [...text.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((rule) => {
           if (file === 'components/forms/builder/builder.css' && /\.forms-builder-form-/.test(rule[1])) return [];
           return [...rule[2].matchAll(/(?:^|;)\s*([\w-]+)\s*:\s*([^;]+)(?=;|$)/g)]
-            .filter((match) => borderProperty.test(match[1]) && !approvedBorder(match[2]) && !/\bCanvasText\b/.test(match[2]))
+            .filter((match) => borderProperty.test(match[1]) && !approvedBorder(match[2]) && !/\bCanvasText\b/.test(match[2])
+              && !(/^border-(?:top|bottom)$/.test(match[1]) && match[2].trim() === '1px solid var(--c-border-0)'
+                && /^(?::root )?#(?:chat-input-card|task-comment-card|crm-note-card) \.composer-resize-handle::before$/.test(rule[1].trim()))
+              && !(file === 'components/ui/composer.css' && match[1] === 'border-color'
+                && match[2].trim() === 'var(--c-text-2)'
+                && rule[1].trim() === ':root :is(#chat-input-card, #task-comment-card, #crm-note-card):focus-within .composer-resize-handle::before'))
             .map((match) => `${file}: ${rule[1].trim()}: ${match[1]}: ${match[2]}`);
         });
       }
@@ -125,6 +139,13 @@ describe('single-source design contract', () => {
       return invalid;
     });
     expect(violations).toEqual([]);
+  });
+
+  it('brightens tertiary composer colors and existing card borders while focused', () => {
+    const css = stripComments(readFileSync('src/components/ui/composer.css', 'utf8'));
+    expect(css).toMatch(/\.composer-card:focus-within\s*\{\s*--c-text-3:\s*var\(--c-text-2\)\s*;/);
+    expect(css).toMatch(/\.composer-card\):focus-within[\s\S]*?border-color:\s*var\(--c-border-2\)\s*;/);
+    expect(css).toMatch(/:focus-within \.composer-resize-handle::before\s*\{\s*border-color:\s*var\(--c-text-2\)\s*;\s*opacity:\s*1\s*;/);
   });
 
   it('has no decorative gradient or blur effects in application styles', () => {

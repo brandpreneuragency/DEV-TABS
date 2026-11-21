@@ -1,7 +1,6 @@
-import { Clock, Plus, User, X } from 'lucide-react';
+import { Clock, Plus, X } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAIStore } from '../../stores/aiStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
@@ -22,6 +21,8 @@ interface RightPanelSubheaderProps {
   taskId?: string | null;
   /** Optional Settings sub-tab id — when set, threads are scoped per tab. */
   settingsTab?: string | null;
+  /** Undefined outside Memory; null if no Memory item is open. */
+  memoryId?: string | null;
 }
 
 /**
@@ -33,8 +34,9 @@ export function RightPanelSubheader({
   workspaceId: workspaceIdOverride,
   taskId: taskIdOverride,
   settingsTab,
+  memoryId,
 }: RightPanelSubheaderProps = {}) {
-  const { threads, newChat, selectThread, deleteThread, activeThreadId } = useChatStore();
+  const { threads, newChat, selectThread, deleteThread, activeThreadId, currentContext, contextLoading } = useChatStore();
   const {
     taskMode,
     activeTaskId,
@@ -43,20 +45,17 @@ export function RightPanelSubheader({
   } = useUIStore();
   const { activeWorkspaceId } = useWorkspaceStore();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyError, setHistoryError] = useState('');
   const [legacyThreads, setLegacyThreads] = useState<ChatThreadMeta[]>([]);
   const [contextSummaryOpen, setContextSummaryOpen] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
-  const agentRef = useRef<HTMLDivElement>(null);
-  const [agentOpen, setAgentOpen] = useState(false);
   const { t } = useTranslation();
-  const { getActiveAgent, agents, setActiveAgent } = useAIStore();
   const contextWindowRef = useRef<HTMLDivElement>(null);
 
   // Resolve the active chat context. Props take precedence so this
   // subheader can be mounted under a Settings sub-tab without the global
   // uiStore knowing about the settings context.
   const mode: 'writer' | 'task' = modeOverride ?? (taskMode ? 'task' : 'writer');
-  const activeAgent = getActiveAgent();
   const contextDocId = taskIdOverride
     ? null
     : workspaceIdOverride !== undefined
@@ -69,20 +68,22 @@ export function RightPanelSubheader({
     : taskMode
     ? activeTaskId
     : null;
+  const memoryMode = memoryId !== undefined;
+  const memoryReady = memoryMode
+    ? Boolean(memoryId && currentContext?.memoryId === memoryId && !contextLoading)
+    : !currentContext?.memoryId;
+  const visibleThreads = memoryMode ? (memoryReady ? threads.filter((thread) => thread.memoryId === memoryId) : []) : threads;
 
   useEffect(() => {
-    if (!historyOpen) return;
+    if (!historyOpen || memoryMode) return;
     let cancelled = false;
     void db.chatThreads.where('origin').equals('legacy_api').reverse().toArray()
       .then((rows) => { if (!cancelled) setLegacyThreads(rows); });
     return () => { cancelled = true; };
-  }, [historyOpen]);
+  }, [historyOpen, memoryMode]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (agentRef.current && !agentRef.current.contains(e.target as Node)) {
-        setAgentOpen(false);
-      }
       if (historyRef.current && !historyRef.current.contains(e.target as Node)) {
         setHistoryOpen(false);
       }
@@ -98,7 +99,6 @@ export function RightPanelSubheader({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setAgentOpen(false);
         setHistoryOpen(false);
         setContextSummaryOpen(false);
         setContextWindowOpen(false);
@@ -109,16 +109,19 @@ export function RightPanelSubheader({
   }, [setContextWindowOpen]);
 
   const handleNewChat = async () => {
+    if (!memoryReady) return;
     await newChat({
       mode,
       workspaceId: contextDocId || undefined,
       taskId: contextTaskId || undefined,
       settingsTab: settingsTab || undefined,
+      memoryId: memoryId || undefined,
     });
     setHistoryOpen(false);
   };
 
   const handleSelectThread = async (threadId: string) => {
+    if (memoryMode && !visibleThreads.some((thread) => thread.id === threadId)) return;
     await selectThread(threadId);
     setHistoryOpen(false);
   };
@@ -151,58 +154,14 @@ export function RightPanelSubheader({
             aria-label="Context window"
             aria-haspopup="dialog"
             aria-expanded={contextWindowOpen ? 'true' : 'false'}
+            disabled={!memoryReady}
           >
             <ContextWindowRing size={18} />
           </button>
-          {contextSummaryOpen && !contextWindowOpen && <ContextWindowSummaryTooltip />}
-          {contextWindowOpen && (
+          {memoryReady && contextSummaryOpen && !contextWindowOpen && <ContextWindowSummaryTooltip />}
+          {memoryReady && contextWindowOpen && (
             <div className="context-window-dropdown" role="dialog" aria-label="Context window">
               <ContextWindowPanel />
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="editor-topbar-col right-panel-agent-column">
-        <div ref={agentRef} className="right-panel-agent-picker">
-          <button
-            type="button"
-            className="tbar-btn right-panel-agent-button"
-            title={activeAgent.name}
-            aria-label={activeAgent.name}
-            aria-haspopup="menu"
-            aria-expanded={agentOpen}
-            onClick={() => {
-              setHistoryOpen(false);
-              setContextSummaryOpen(false);
-              setContextWindowOpen(false);
-              setAgentOpen((open) => !open);
-            }}
-          >
-            <User className="ui-icon"  />
-            <span className="trunc">{activeAgent.name}</span>
-          </button>
-          {agentOpen && (
-            <div className="drop right-panel-agent-menu" role="menu" aria-label={activeAgent.name}>
-              {agents.map((agent) => (
-                <button
-                  type="button"
-                  key={agent.id}
-                  role="menuitemradio"
-                  aria-checked={agent.id === activeAgent.id}
-                  className={`drop-item${agent.id === activeAgent.id ? ' header-dropdown-item--active' : ''}`}
-                  onClick={() => { setActiveAgent(agent.id); setAgentOpen(false); }}
-                >
-                  <span className="trunc med">{agent.name}</span>
-                </button>
-              ))}
-              <button
-                type="button"
-                role="menuitem"
-                className="drop-item drop-item--brand"
-                onClick={() => { useUIStore.getState().openSettings('agents'); setAgentOpen(false); }}
-              >
-                {t('sidebar.manageAgents')}
-              </button>
             </div>
           )}
         </div>
@@ -222,6 +181,7 @@ export function RightPanelSubheader({
               setHistoryOpen((v) => !v);
             }}
             title="Chat history"
+            disabled={!memoryReady}
           >
             <Clock className="ui-icon"  />
           </button>
@@ -230,15 +190,17 @@ export function RightPanelSubheader({
             className="ui-icon-button tbar-btn"
             onClick={handleNewChat}
             title="New chat"
+            disabled={!memoryReady}
           >
             <Plus className="ui-icon"  />
           </button>
-          {historyOpen && (
+          {historyOpen && memoryReady && (
             <div className="chat-history-dropdown">
-              {threads.length === 0 && legacyThreads.length === 0 && (
+              {historyError && <p className="open-code-request-error" role="alert">{historyError}</p>}
+              {visibleThreads.length === 0 && (memoryMode || legacyThreads.length === 0) && (
                 <div className="chat-history-empty subtle">No chats yet</div>
               )}
-              {threads.map((thread) => (
+              {visibleThreads.map((thread) => (
                 <div
                   key={thread.id}
                   className={`chat-history-item ${thread.id === activeThreadId ? 'active' : ''}`}
@@ -251,17 +213,18 @@ export function RightPanelSubheader({
                     title="Delete chat"
                     onClick={(e) => {
                       e.stopPropagation();
-                      deleteThread(thread.id);
+                      setHistoryError('');
+                      void deleteThread(thread.id).catch((cause: unknown) => setHistoryError(cause instanceof Error ? cause.message : 'Could not delete this chat.'));
                     }}
                   >
                     <X className="ui-icon"  />
                   </button>
                 </div>
               ))}
-              {legacyThreads.some((thread) => !threads.some((current) => current.id === thread.id)) && (
-                <div className="chat-history-empty subtle">{t('codex.legacyHistory')}</div>
+              {!memoryMode && legacyThreads.some((thread) => !threads.some((current) => current.id === thread.id)) && (
+                <div className="chat-history-empty subtle">{t('openCode.legacyHistory')}</div>
               )}
-              {legacyThreads.filter((thread) => !threads.some((current) => current.id === thread.id))
+              {!memoryMode && legacyThreads.filter((thread) => !threads.some((current) => current.id === thread.id))
                 .map((thread) => (
                   <button type="button" key={thread.id}
                     className={`chat-history-item ${thread.id === activeThreadId ? 'active' : ''}`}

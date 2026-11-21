@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useChatStore } from '../../stores/chatStore';
-import { useCodexService } from '../../services/codex/useCodexService';
-import { db } from '../../services/db';
 import { estimateTokens } from '../../utils/tokens';
 import type { ChatMessage } from '../../types';
+import { useOpenCodeStore } from '../../stores/openCodeStore';
 
 export interface ContextWindowStats {
   userMessages: number;
@@ -104,42 +103,35 @@ export function aggregateContextMessages(messages: ChatMessage[]): ContextWindow
 
 export function useContextWindowData() {
   const { threads, activeThreadId, messagesByThread } = useChatStore();
-  const codex = useCodexService();
-  const [lastRunModel, setLastRunModel] = useState<{ threadId: string; id?: string } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!activeThreadId) return;
-    void db.codexRuns.where('appThreadId').equals(activeThreadId).toArray().then((runs) => {
-      if (cancelled) return;
-      const latest = runs.sort((a, b) => b.createdAt - a.createdAt)[0];
-      setLastRunModel(latest ? { threadId: activeThreadId, id: latest.scope.model } : null);
-    }).catch(() => { if (!cancelled) setLastRunModel(null); });
-    return () => { cancelled = true; };
-  }, [activeThreadId, codex.activeRunId]);
+  const openCodeModels = useOpenCodeStore((state) => state.models);
+  const openCodeRun = useOpenCodeStore((state) => state.runsByThread[activeThreadId ?? '']);
+  const openCodeMessages = useMemo(() => openCodeRun?.messages ?? [], [openCodeRun?.messages]);
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? null,
     [threads, activeThreadId],
   );
   const messages = useMemo(
-    () => messagesByThread[activeThreadId ?? ''] ?? [],
-    [messagesByThread, activeThreadId],
+    () => activeThread?.origin === 'openCode' ? openCodeMessages.map((message) => ({
+      id: message.id, threadId: activeThreadId ?? '', mode: activeThread.mode, agentId: message.agent ?? 'openCode',
+      role: message.kind === 'user' ? 'user' as const : message.kind === 'assistant' ? 'assistant' as const : 'system' as const,
+      content: message.text ?? '', timestamp: message.created,
+    })) : messagesByThread[activeThreadId ?? ''] ?? [],
+    [messagesByThread, activeThreadId, activeThread, openCodeMessages],
   );
   const stats = useMemo(() => aggregateContextMessages(messages), [messages]);
 
-  const currentRunModel = lastRunModel?.threadId === activeThreadId ? lastRunModel : null;
-  const model = currentRunModel && (codex.models.find((item) => item.id === currentRunModel.id)
-    ?? codex.models.find((item) => item.isDefault) ?? codex.models[0]);
-  const modelName = currentRunModel?.id && !codex.models.some((item) => item.id === currentRunModel.id)
-    ? currentRunModel.id : model?.displayName;
-  const activeModel = modelName ? { name: modelName } : undefined;
-  const provider = currentRunModel ? { name: 'Codex', selectedModel: currentRunModel.id ?? model?.id ?? '' } : undefined;
-  const contextLimit = null;
-  const usagePercent =
-    contextLimit && contextLimit > 0
-      ? Math.min(100, Math.round((stats.totalTokens / contextLimit) * 100))
-      : null;
+  const openModelId = activeThread?.origin === 'openCode' ? openCodeMessages.at(-1)?.model?.id : undefined;
+  const openModel = openCodeModels.find((item) => item.modelId === openModelId || item.id === openModelId);
+  const activeModel = activeThread?.origin === 'openCode'
+    ? openModel ? { name: openModel.name } : openModelId ? { name: openModelId } : undefined
+    : undefined;
+  const provider = activeThread?.origin === 'openCode'
+    ? openModel ? { name: 'OpenCode', selectedModel: openModel.name } : { name: 'OpenCode', selectedModel: openModelId ?? '' }
+    : undefined;
+  const contextLimit = activeThread?.origin === 'openCode' ? openModel?.contextLimit ?? null : null;
+  // Message/token totals are estimates, not the server's live context occupancy.
+  const usagePercent = null;
 
   return {
     activeModel,

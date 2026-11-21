@@ -12,20 +12,26 @@ beforeEach(async () => {
 });
 
 describe('chat provider thread ownership', () => {
-  it('uses the saved provider for new chats and changes only an empty thread', async () => {
+  it('uses OpenCode as the default provider for new chats', async () => {
+    await useChatStore.getState().newChat({ mode: 'writer' });
+    const threadId = useChatStore.getState().activeThreadId!;
+    expect((await db.chatThreads.get(threadId))?.origin).toBe('openCode');
+  });
+
+  it('keeps new chats on OpenCode and changes only an empty thread', async () => {
     await db.settings.put({ key: 'activeChatProviderId', value: 'grok' });
     await useChatStore.getState().newChat({ mode: 'writer', workspaceId: 'workspace-1' });
     const threadId = useChatStore.getState().activeThreadId!;
-    expect((await db.chatThreads.get(threadId))?.origin).toBe('grok');
+    expect((await db.chatThreads.get(threadId))?.origin).toBe('openCode');
 
-    expect(await useChatStore.getState().setEmptyThreadOrigin(threadId, 'openCode')).toBe(true);
+    expect(await useChatStore.getState().setEmptyThreadOpenCode(threadId)).toBe(true);
     expect((await db.chatThreads.get(threadId))?.origin).toBe('openCode');
 
     await db.chatMessages.add({
       id: 'message-1', threadId, mode: 'writer', workspaceId: 'workspace-1', agentId: 'agent-1',
       role: 'user', content: 'Keep this provider', timestamp: Date.now(),
     });
-    expect(await useChatStore.getState().setEmptyThreadOrigin(threadId, 'commandCode')).toBe(false);
+    expect(await useChatStore.getState().setEmptyThreadOpenCode(threadId)).toBe(false);
     expect((await db.chatThreads.get(threadId))?.origin).toBe('openCode');
   });
 });

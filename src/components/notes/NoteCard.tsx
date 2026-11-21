@@ -33,6 +33,7 @@ export function NoteCard({ id, note, newDraft, categories, dragEnabled = false, 
   const menuButton = useRef<HTMLButtonElement>(null);
   const categoryPickerRef = useRef<HTMLDivElement>(null);
   const categoryButtonRef = useRef<HTMLButtonElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const value = editing ? draft : note ?? draft ?? newDraft;
   const title = value?.title || t('notes.untitled');
   const category = categories.find((item) => item.id === value?.categoryId);
@@ -149,12 +150,13 @@ export function NoteCard({ id, note, newDraft, categories, dragEnabled = false, 
         </div>}
       </div> : <NoteBadge category={category} />}
       {editing ? <div className="notes-card-save-actions">
-        <button type="button" className="ui-button notes-button" disabled={saving} onClick={() => setConfirm('discard')}>{t('notes.cancel')}</button>
+        <button ref={cancelButtonRef} type="button" className="ui-button notes-button" disabled={saving} onClick={() => setConfirm('discard')}>{t('notes.cancel')}</button>
         <button type="button" className="ui-button ui-button--primary notes-button notes-button--primary" disabled={saving}
           onClick={() => void useNotesStore.getState().saveNote(id).catch(() => undefined)}>{t(saving ? 'notes.saving' : 'notes.save')}</button>
       </div> : draft && <span className="notes-draft-indicator">{t('notes.draft')}</span>}
     </footer>
     {confirm && <NotesConfirmation title={t(confirm === 'delete' ? 'notes.delete' : 'notes.discard')}
+      anchorRef={confirm === 'discard' ? cancelButtonRef : undefined}
       message={t(confirm === 'delete' ? 'notes.deleteConfirm' : 'notes.discardConfirm', { title })}
       confirmLabel={t(confirm === 'delete' ? 'notes.delete' : 'notes.discard')}
       onClose={() => setConfirm(null)} onConfirm={() => confirm === 'delete'

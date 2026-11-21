@@ -1,6 +1,6 @@
 const DRAG_SURFACES = [
   '.crm-kanban-card', '.notes-card', '[data-ws-tab-id]',
-  '.scope-tab[draggable="true"]', '.scope-project-heading > span[draggable="true"]',
+  '.scope-tab[draggable="true"]', '.scope-project-heading > button[draggable="true"]',
   '[data-tree-node][draggable="true"]', '[data-action-row][draggable="true"]',
 ].join(', ');
 

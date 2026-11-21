@@ -1,21 +1,43 @@
 import type { JSONContent } from '@tiptap/react';
+import { isAllowedUri } from '@tiptap/extension-link';
 import type { ReactNode } from 'react';
+import { getInlineTextPresetStyle } from '../editor/InlineTextPreset';
+
+const TEXT_ALIGNMENTS = ['left', 'center', 'right', 'justify'] as const;
+
+function renderMark(value: ReactNode, mark: NonNullable<JSONContent['marks']>[number]): ReactNode {
+  switch (mark.type) {
+    case 'bold': return <strong>{value}</strong>;
+    case 'italic': return <em>{value}</em>;
+    case 'underline': return <u>{value}</u>;
+    case 'strike': return <s>{value}</s>;
+    case 'code': return <code>{value}</code>;
+    case 'textStyle': {
+      const preset = mark.attrs?.textPreset;
+      const style = getInlineTextPresetStyle(preset);
+      const color = typeof mark.attrs?.color === 'string' ? mark.attrs.color : undefined;
+      return <span data-text-preset={style ? preset : undefined} style={{ ...style, color }}>{value}</span>;
+    }
+    case 'link': {
+      const href = mark.attrs?.href;
+      // The card owns click and keyboard activation in preview mode.
+      return typeof href === 'string' && href.trim() && isAllowedUri(href) ? <a>{value}</a> : value;
+    }
+    default: return value;
+  }
+}
 
 function renderNode(node: JSONContent, key: number): ReactNode {
-  const children = node.content?.map(renderNode);
   if (node.type === 'text') {
-    let value: ReactNode = node.text ?? '';
-    for (const mark of node.marks ?? []) {
-      if (mark.type === 'bold') value = <strong>{value}</strong>;
-      if (mark.type === 'italic') value = <em>{value}</em>;
-      if (mark.type === 'underline') value = <u>{value}</u>;
-      if (mark.type === 'strike') value = <s>{value}</s>;
-      if (mark.type === 'code') value = <code>{value}</code>;
-    }
-    return <span key={key}>{value}</span>;
+    const text = node.text ?? '';
+    return <span key={key}>{node.marks?.reduceRight<ReactNode>(renderMark, text) ?? text}</span>;
   }
+  const children = node.content?.map(renderNode);
   switch (node.type) {
-    case 'paragraph': return <p key={key}>{children ?? <br />}</p>;
+    case 'paragraph': {
+      const textAlign = TEXT_ALIGNMENTS.find(value => value === node.attrs?.textAlign);
+      return <p key={key} style={{ textAlign }}>{children ?? <br />}</p>;
+    }
     case 'bulletList': return <ul key={key}>{children}</ul>;
     case 'orderedList': return <ol key={key} start={typeof node.attrs?.start === 'number' ? node.attrs.start : 1}>{children}</ol>;
     case 'listItem': return <li key={key}>{children}</li>;

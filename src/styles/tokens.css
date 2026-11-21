@@ -6,21 +6,23 @@
  */
 :root {
   /* SURFACES — active, content, controls, shell */
-  --c-background-0: #200e20;
-  --c-background-1: #360f36;
-  --c-background-1a: #1b141b99;
+  --c-background-0: #212121;
+  --c-background-1: #434242;
+  --c-background-1a: #0d0d0d;
   --c-background-2: #0d0d0d;
-  --c-background-2a: #131313;
-  --c-background-3: #000;
-  --c-background-4: #030303;
+  --c-background-2a: #0d0d0d;
+  --c-background-3: #191919;
+  --c-background-4: #191919;
   --c-text-1: #fff;
-  --c-text-2: #bdbdbd;
-  --c-text-3: #999;
+  --c-text-2: #adadad;
+  --c-text-3: #8d8c8c;
+  --c-border-0:#1d1d1d;
   --c-border-1: #2e2e2e;
-  --c-border-2: #333;
-  --c-accent-1: #17d4b5;
-  --c-accent-2: #187c6a;
-  --c-accent-2a: #187c6a7a;
+  --c-border-2: #ccc;
+  --border-width-strong: 4px;
+  --c-accent-1: #bd4516;
+  --c-accent-2: #86391a;
+  --c-accent-2a: #4e3939;
   --c-accent-3: #19c3da;
 
   /* STATUS — semantic feedback; task priority colors stay distinct */
@@ -46,11 +48,15 @@
   /* CONTROLS — all UI icons, including empty-state illustrations */
   --c-icon-1: 14px;
   --c-sq-button: 24px;
+  --window-control-width: 36px;
   --icon-stroke: 2;
   --control-height-sm: 32px;
   --control-height-md: 40px;
 
   --composer-min-height: 72px;
+  --notes-card-height: 140px;
+  --notes-card-min-width: 320px;
+  --notes-editing-card-min-height: 240px;
   --border-width: 1px;
   --radius-sm: 6px;
   --radius-full: 50px;
@@ -75,11 +81,14 @@
   --sidebar-width: 36px;
   --main-panel-min-width: 420px;
   --primary-min-width: 140px;
+  --clients-card-min-width: 240px;
 
   --shell-handle-width: 6px;
-  --editor-inset: 40px;
+  --editor-inset: 34px;
 
   /* OVERLAYS */
+  --task-project-picker-offset: -50px;
+  --accounts-tray-width: 640px;
   --modal-max-width: 560px;
 
   --modal-max-width-sm: 448px;

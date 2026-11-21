@@ -95,6 +95,8 @@ export interface ChatThreadMeta {
    *  set, the thread is scoped to the Settings AI sidebar instead of a
    *  document or task. */
   settingsTab?: string;
+  /** Read-only Memory collection item this thread belongs to. */
+  memoryId?: string;
   title: string;
   createdAt: number;
   updatedAt: number;

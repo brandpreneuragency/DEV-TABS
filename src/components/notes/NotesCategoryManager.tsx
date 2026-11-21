@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type RefObject } from 'react';
 import { Check, Pencil, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNotesStore } from '../../stores/notesStore';
@@ -6,7 +6,7 @@ import { NOTE_COLORS, type NoteCategory, type NoteColor } from '../../types/note
 import { NoteBadge } from './NoteCard';
 import { NotesConfirmation, NotesDialog } from './NotesDialog';
 
-export function NotesCategoryManager() {
+export function NotesCategoryManager({ anchorRef }: { anchorRef?: RefObject<HTMLElement | null> }) {
   const { t } = useTranslation();
   const categories = useNotesStore((state) => state.categories);
   const error = useNotesStore((state) => state.error);
@@ -18,7 +18,7 @@ export function NotesCategoryManager() {
   const canSave = !busy && Boolean(name.trim()) && color !== null;
   const reset = () => { setEditingId(undefined); setName(''); setColor(null); };
   const close = () => { if (!busy) useNotesStore.getState().setCategoryManagerOpen(false); };
-  return <NotesDialog title={t('notes.addCategory')} onClose={close}>
+  return <NotesDialog title={t('notes.addCategory')} onClose={close} anchorRef={anchorRef}>
     <button type="button" className="ui-icon-button notes-icon-button notes-dialog-close" aria-label={t('notes.close')} disabled={busy} onClick={close}><X /></button>
     <form className="notes-category-form" onSubmit={(event) => {
       event.preventDefault(); if (!canSave || color === null) return;
@@ -42,7 +42,6 @@ export function NotesCategoryManager() {
     </form>
     {error && <p role="alert" className="notes-danger">{t(`notes.error_${error}`)}</p>}
     <div className="notes-category-list">
-      {!categories.length && <p className="notes-muted">{t('notes.noCategories')}</p>}
       {[...categories].sort((left, right) => left.name.localeCompare(right.name)).map((category) => <div key={category.id} className="ui-list-row notes-category-row">
         <NoteBadge category={category} />
         <div className="notes-category-row-actions">

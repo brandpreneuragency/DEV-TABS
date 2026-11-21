@@ -1,275 +1,74 @@
-import { readFileSync } from 'node:fs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { beforeEach, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { ChatModelControls } from './ChatModelControls';
-
-const state = vi.hoisted(() => ({
-  settings: new Map<string, unknown>(),
-  hiddenByProvider: new Map<string, string[]>(),
-  allHiddenProviders: new Set<string>(),
-  codexHidden: [] as string[],
-  codexAllHidden: false,
-  hasConnectedFolder: false,
-  session: undefined as { permissionProfile?: 'readOnly' | 'workspaceWrite' } | undefined,
-}));
+import { useOpenCodeStore } from '../../stores/openCodeStore';
 
 const mocks = vi.hoisted(() => ({
+  settings: new Map<string, unknown>(),
   put: vi.fn(async () => undefined),
-  openSettings: vi.fn(),
-  probe: vi.fn(async (providerId: string) => cliProbe(providerId)),
+  start: vi.fn(async () => undefined),
+  setModel: vi.fn(async () => undefined),
+  setAgent: vi.fn(async () => undefined),
+  models: [
+    { id: 'p:m1', providerId: 'p', modelId: 'm1', name: 'Model One', family: null, enabled: true, tools: true, contextLimit: 8192, outputLimit: null },
+    { id: 'p:m2', providerId: 'p', modelId: 'm2', name: 'Model Two', family: null, enabled: true, tools: true, contextLimit: null, outputLimit: null },
+  ],
+  agents: [{ id: 'build', name: 'Build', mode: 'primary' as const, description: null, hidden: false, model: null }],
 }));
 
-function cliProbe(providerId: string) {
-  const models = {
-    grok: [
-      { id: 'grok-4.7', displayName: 'Grok 4.7', isDefault: true, reasoningEfforts: ['low', 'medium', 'high', 'xhigh'] },
-      { id: 'grok-hidden', displayName: 'Hidden Grok', isDefault: false, reasoningEfforts: [] },
-    ],
-    commandCode: [{ id: 'command-r', displayName: 'Command R', isDefault: true, reasoningEfforts: [] }],
-    openCode: [{ id: 'open-code', displayName: 'OpenCode Large', isDefault: true, reasoningEfforts: [] }],
-  } as const;
-  return {
-    providerId,
-    installed: true,
-    authState: 'authenticated' as const,
-    models: models[providerId as keyof typeof models] ?? [],
-  };
-}
-
-vi.mock('react-i18next', () => ({
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...await importOriginal<typeof import('react-i18next')>(),
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-
-vi.mock('dexie', () => ({
-  liveQuery: (query: () => Promise<unknown>) => ({
-    subscribe: ({ next }: { next: (value: unknown) => void }) => {
-      void query().then(next);
-      return { unsubscribe: vi.fn() };
-    },
-  }),
-}));
-
-vi.mock('../../services/db', () => ({
-  db: {
-    settings: {
-      get: async (key: string) => state.settings.has(key) ? { key, value: state.settings.get(key) } : undefined,
-      put: mocks.put,
-    },
-    codexSessions: { get: async () => state.session },
-  },
-}));
-
-vi.mock('../../services/runtime', () => ({ isTauriRuntime: () => true }));
-
-vi.mock('../../services/providers/desktopClient', () => ({ probeCliProvider: mocks.probe }));
-
+vi.mock('../../services/db', () => ({ db: { settings: {
+  get: async (key: string) => mocks.settings.has(key) ? { key, value: mocks.settings.get(key) } : undefined,
+  put: mocks.put,
+} } }));
 vi.mock('../../services/providers/modelVisibility', () => ({
-  useProviderModelVisibility: (providerId: string) => ({
-    allHidden: state.allHiddenProviders.has(providerId),
-    hiddenModelIds: state.hiddenByProvider.get(providerId) ?? [],
-  }),
-  visibleProviderModels: <T extends { id: string }>(models: T[], visibility: { allHidden: boolean; hiddenModelIds: string[] }) =>
-    visibility.allHidden ? [] : models.filter((model) => !visibility.hiddenModelIds.includes(model.id)),
+  useProviderModelVisibility: () => ({ allHidden: false, hiddenModelIds: [] }),
+  visibleProviderModels: <T extends { id: string }>(models: T[]) => models,
 }));
+vi.mock('../../services/openCode/sessionService', () => ({ openCodeSessionService: { setModel: mocks.setModel, setAgent: mocks.setAgent } }));
 
-vi.mock('../../services/codex/useCodexService', () => ({
-  useCodexService: () => ({
-    connection: { version: '1.0.0' },
-    activeRunId: undefined,
-    models: [
-      { id: 'astra', displayName: 'GPT-6 Astra', isDefault: true, reasoningEfforts: ['low', 'high'] },
-      { id: 'sol', displayName: 'GPT-6 Sol', isDefault: false, reasoningEfforts: ['medium', 'high'] },
-    ],
-  }),
-}));
+beforeEach(() => {
+  mocks.settings = new Map(); mocks.put.mockClear(); mocks.start.mockClear(); mocks.setModel.mockClear(); mocks.setAgent.mockClear();
+  useOpenCodeStore.setState({ models: mocks.models, agents: mocks.agents, connection: 'connected', start: mocks.start });
+});
 
-vi.mock('../../services/codex/modelVisibility', () => ({
-  useCodexModelVisibility: () => ({ allHidden: state.codexAllHidden, hiddenModelIds: state.codexHidden }),
-  visibleCodexModels: <T extends { id: string }>(models: T[], visibility: { allHidden: boolean; hiddenModelIds: string[] }) =>
-    visibility.allHidden ? [] : models.filter((model) => !visibility.hiddenModelIds.includes(model.id)),
-}));
+it('discovers and switches OpenCode models and agents only', async () => {
+  render(<ChatModelControls threadId="thread-1" />);
+  expect(await screen.findByRole('combobox', { name: 'openCode.model' })).toHaveValue('p:m1');
+  expect(screen.getByRole('option', { name: 'Model One' })).toBeInTheDocument();
+  fireEvent.change(screen.getByRole('combobox', { name: 'openCode.model' }), { target: { value: 'p:m1' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'openCode.agent' }), { target: { value: 'build' } });
+  expect(mocks.put).toHaveBeenCalledWith({ key: 'openCodeModelId', value: 'p:m1' });
+  expect(mocks.setModel).toHaveBeenCalledWith('thread-1', { id: 'm1', providerId: 'p' });
+  expect(mocks.setAgent).toHaveBeenCalledWith('thread-1', 'build');
+  expect(mocks.start).toHaveBeenCalledOnce();
+});
 
-vi.mock('../../stores/workspaceStore', () => ({
-  useWorkspaceStore: (selector: (store: { workspaces: Array<{ id: string; connectedFolders: Array<{ path: string }> }> }) => unknown) =>
-    selector({ workspaces: [{ id: 'workspace-1', connectedFolders: state.hasConnectedFolder ? [{ path: 'C:/work' }] : [] }] }),
-}));
+it('locks both selectors while the chat is sending', () => {
+  render(<ChatModelControls threadId="thread-1" locked />);
+  expect(screen.getByRole('combobox', { name: 'openCode.model' })).toBeDisabled();
+  expect(screen.getByRole('combobox', { name: 'openCode.agent' })).toBeDisabled();
+});
 
-vi.mock('../../stores/uiStore', () => ({
-  useUIStore: (selector: (store: { openSettings: typeof mocks.openSettings }) => unknown) => selector({ openSettings: mocks.openSettings }),
-}));
+it('renders empty discovery and updates when visible models and agents arrive', () => {
+  useOpenCodeStore.setState({ models: [], agents: [], connection: 'disconnected' });
+  render(<ChatModelControls threadId="thread-1" />);
+  expect(screen.getByRole('combobox', { name: 'openCode.model' })).toBeDisabled();
+  expect(screen.getByRole('combobox', { name: 'openCode.agent' })).toBeDisabled();
 
-describe('ChatModelControls', () => {
-  beforeEach(() => {
-    state.settings = new Map([
-      ['codexModelId', 'astra'],
-      ['codexEffort', 'high'],
-      ['providerModelId:grok', 'grok-4.7'],
-    ]);
-    state.hiddenByProvider = new Map([['grok', ['grok-hidden']]]);
-    state.allHiddenProviders = new Set();
-    state.codexHidden = [];
-    state.codexAllHidden = false;
-    state.hasConnectedFolder = false;
-    state.session = undefined;
-    mocks.put.mockClear();
-    mocks.probe.mockReset();
-    mocks.probe.mockImplementation(async (providerId: string) => cliProbe(providerId));
-    mocks.openSettings.mockClear();
-  });
+  act(() => useOpenCodeStore.setState({
+    connection: 'connected',
+    models: [...mocks.models, { ...mocks.models[0], id: 'p:disabled', name: 'Disabled Model', enabled: false }],
+    agents: [...mocks.agents, { ...mocks.agents[0], id: 'hidden', name: 'Hidden Agent', hidden: true }],
+  }));
 
-  it('shows visible provider models in one searchable grouped picker and selects across providers', async () => {
-    const user = userEvent.setup();
-    const onSelectModel = vi.fn(async () => undefined);
-    render(<ChatModelControls providerId="codex" threadId="thread-1" workspaceId="workspace-1" onSelectModel={onSelectModel} />);
-
-    await user.click(await screen.findByRole('button', { name: 'cliChat.model: Codex / GPT-6 Astra' }));
-    const picker = screen.getByRole('group', { name: 'cliChat.model' });
-
-    await waitFor(() => expect(mocks.probe).toHaveBeenCalledWith('grok'));
-    expect(within(picker).getByText('Codex')).toBeInTheDocument();
-    expect(within(picker).getByText('Grok')).toBeInTheDocument();
-    expect(within(picker).getByText('Command Code')).toBeInTheDocument();
-    expect(within(picker).getByText('OpenCode')).toBeInTheDocument();
-    expect(within(picker).getByRole('button', { name: /GPT-6 Astra/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(picker).getByRole('button', { name: /Grok 4.7/i })).toBeInTheDocument();
-    expect(within(picker).queryByRole('button', { name: /Hidden Grok/i })).not.toBeInTheDocument();
-
-    await user.click(within(picker).getByRole('button', { name: /Grok 4.7/i }));
-    expect(onSelectModel).toHaveBeenCalledWith('grok', 'grok-4.7');
-    await waitFor(() => expect(screen.queryByRole('group', { name: 'cliChat.model' })).not.toBeInTheDocument());
-
-    await user.click(screen.getByRole('button', { name: /cliChat\.model:/i }));
-    const search = within(screen.getByRole('group', { name: 'cliChat.model' })).getByRole('searchbox');
-    await user.type(search, 'command');
-    const filteredPicker = screen.getByRole('group', { name: 'cliChat.model' });
-    await waitFor(() => expect(within(filteredPicker).getByRole('button', { name: /Command R/i })).toBeInTheDocument());
-    expect(within(filteredPicker).queryByRole('button', { name: /GPT-6 Astra/i })).not.toBeInTheDocument();
-  });
-
-  it('styles the body-portaled picker without relying on composer ancestry', async () => {
-    const stylesheet = document.createElement('style');
-    stylesheet.textContent = readFileSync('src/components/sidebar/ChatModelControls.css', 'utf8');
-    document.head.append(stylesheet);
-    try {
-      const user = userEvent.setup();
-      render(<div id="chat-input-card">
-        <ChatModelControls providerId="codex" threadId="thread-1" onSelectModel={async () => undefined} />
-      </div>);
-      await user.click(await screen.findByRole('button', { name: 'cliChat.model: Codex / GPT-6 Astra' }));
-      const picker = screen.getByRole('group', { name: 'cliChat.model' });
-      expect(picker.parentElement).toBe(document.body);
-      expect(picker.closest('#chat-input-card')).toBeNull();
-      expect(getComputedStyle(picker).position).toBe('fixed');
-      expect(getComputedStyle(picker).display).toBe('flex');
-      expect(getComputedStyle(within(picker).getByRole('searchbox')).width).toBe('100%');
-      expect(getComputedStyle(within(picker).getByRole('button', { name: /GPT-6 Astra/i })).display).toBe('flex');
-      const list = picker.querySelector('.chat-model-list');
-      expect(list).not.toBeNull();
-      expect(getComputedStyle(list!).overflowY).toBe('auto');
-    } finally {
-      stylesheet.remove();
-    }
-  });
-
-  it('persists a direct Codex reasoning effort without opening the options menu', async () => {
-    const user = userEvent.setup();
-    render(<ChatModelControls providerId="codex" threadId="thread-1" workspaceId="workspace-1" onSelectModel={async () => undefined} />);
-
-    await user.click(await screen.findByRole('button', { name: 'codex.reasoning: high' }));
-    const efforts = screen.getByRole('group', { name: 'codex.reasoning' });
-    await user.click(within(efforts).getByRole('button', { name: /low/i }));
-
-    expect(mocks.put).toHaveBeenCalledWith({ key: 'codexEffort', value: 'low' });
-    expect(screen.queryByRole('group', { name: 'codex.reasoning' })).not.toBeInTheDocument();
-  });
-
-  it('focuses search when the portal first mounts and preserves focus while repositioning', async () => {
-    const user = userEvent.setup();
-    render(<ChatModelControls providerId="codex" threadId="thread-1" onSelectModel={async () => undefined} />);
-    await user.click(await screen.findByRole('button', { name: 'cliChat.model: Codex / GPT-6 Astra' }));
-    const picker = screen.getByRole('group', { name: 'cliChat.model' });
-    expect(within(picker).getByRole('searchbox')).toHaveFocus();
-    const option = within(picker).getByRole('button', { name: /GPT-6 Astra/i });
-    option.focus();
-    fireEvent(window, new Event('resize'));
-    expect(option).toHaveFocus();
-  });
-
-  it('shows Grok reasoning beside its model and saves the choice for that model', async () => {
-    const user = userEvent.setup();
-    render(<ChatModelControls providerId="grok" threadId="thread-1" workspaceId="workspace-1"
-      onSelectModel={async () => undefined} />);
-
-    await screen.findByRole('button', { name: 'cliChat.model: Grok / Grok 4.7' });
-    await user.click(screen.getByRole('button', { name: 'codex.reasoning: codex.defaultEffort' }));
-    const efforts = screen.getByRole('group', { name: 'codex.reasoning' });
-    await user.click(within(efforts).getByRole('button', { name: 'xhigh' }));
-
-    expect(mocks.put).toHaveBeenCalledWith({ key: 'providerReasoningEffort:grok:grok-4.7', value: 'xhigh' });
-    expect(screen.getByRole('button', { name: 'codex.reasoning: xhigh' })).toBeInTheDocument();
-  });
-
-  it('keeps the reasoning control visible when a CLI reports no effort choices', async () => {
-    const user = userEvent.setup();
-    render(<ChatModelControls providerId="commandCode" threadId="thread-1" workspaceId="workspace-1"
-      onSelectModel={async () => undefined} />);
-
-    await screen.findByRole('button', { name: 'cliChat.model: Command Code / Command R' });
-    await user.click(screen.getByRole('button', { name: 'codex.reasoning: codex.defaultEffort' }));
-    const efforts = screen.getByRole('group', { name: 'codex.reasoning' });
-    expect(within(efforts).getByText('cliChat.reasoningUnavailable')).toBeInTheDocument();
-    expect(within(efforts).getAllByRole('button')).toHaveLength(1);
-  });
-
-  it('closes the picker with Escape and an outside pointer press', async () => {
-    const user = userEvent.setup();
-    render(<ChatModelControls providerId="codex" threadId="thread-1" workspaceId="workspace-1" onSelectModel={async () => undefined} />);
-
-    const trigger = await screen.findByRole('button', { name: 'cliChat.model: Codex / GPT-6 Astra' });
-    await user.click(trigger);
-    expect(screen.getByRole('group', { name: 'cliChat.model' })).toBeInTheDocument();
-
-    await user.keyboard('{Escape}');
-    expect(screen.queryByRole('group', { name: 'cliChat.model' })).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
-
-    await user.click(trigger);
-    fireEvent.pointerDown(document.body);
-    await waitFor(() => expect(screen.queryByRole('group', { name: 'cliChat.model' })).not.toBeInTheDocument());
-  });
-
-  it('locks model switching during a run and hides Codex settings in a legacy thread', async () => {
-    const onSelectModel = vi.fn(async () => undefined);
-    const { rerender } = render(<ChatModelControls providerId="codex" switchingLocked
-      threadId="thread-1" workspaceId="workspace-1" onSelectModel={onSelectModel} />);
-
-    expect(await screen.findByRole('button', { name: 'cliChat.model: Codex / GPT-6 Astra' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'codex.reasoning: high' })).toBeDisabled();
-
-    rerender(<ChatModelControls providerId="codex" providerLocked
-      threadId="thread-1" workspaceId="workspace-1" onSelectModel={onSelectModel} />);
-    expect(screen.getByRole('button', { name: 'cliChat.model: Codex / GPT-6 Astra' })).toBeDisabled();
-    expect(screen.queryByRole('button', { name: 'codex.reasoning: high' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'codex.options' })).not.toBeInTheDocument();
-    expect(onSelectModel).not.toHaveBeenCalled();
-  });
-
-  it('checks CLI catalogues one at a time when the picker opens', async () => {
-    let finishGrok: (() => void) | undefined;
-    const grokPending = new Promise<void>((resolve) => { finishGrok = resolve; });
-    mocks.probe.mockImplementation(async (id: string) => {
-      if (id === 'grok') await grokPending;
-      return cliProbe(id);
-    });
-    const user = userEvent.setup();
-    render(<ChatModelControls providerId="grok" threadId="thread-1" workspaceId="workspace-1"
-      onSelectModel={async () => undefined} />);
-
-    await user.click(screen.getByRole('button', { name: 'cliChat.model: Grok / cliChat.setup' }));
-    expect(mocks.probe).toHaveBeenCalledWith('grok');
-    expect(mocks.probe).not.toHaveBeenCalledWith('commandCode');
-    finishGrok?.();
-    await waitFor(() => expect(mocks.probe).toHaveBeenCalledWith('commandCode'));
-  });
+  expect(screen.getByRole('combobox', { name: 'openCode.model' })).toBeEnabled();
+  expect(screen.getByRole('combobox', { name: 'openCode.agent' })).toBeEnabled();
+  expect(screen.getByRole('option', { name: 'Model One' })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'Build' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Disabled Model' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Hidden Agent' })).not.toBeInTheDocument();
 });

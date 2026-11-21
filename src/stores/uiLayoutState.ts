@@ -6,7 +6,7 @@
  * via temporary compatibility mirrors in uiStore.
  */
 
-export type WorkspaceMode = 'documents' | 'github' | 'tasks' | 'crm' | 'forms' | 'settings' | 'notes' | 'providerAccounts';
+export type WorkspaceMode = 'documents' | 'tasks' | 'crm' | 'forms' | 'settings' | 'notes' | 'memory' | 'providerAccounts' | 'scripts';
 
 export type ContextPanelOpenByMode = {
   documents: boolean;
@@ -14,9 +14,10 @@ export type ContextPanelOpenByMode = {
   crm: boolean;
   forms: boolean;
   settings: boolean;
-  github: boolean;
   notes: boolean;
+  memory: boolean;
   providerAccounts: boolean;
+  scripts: boolean;
 };
 
 export const DEFAULT_CONTEXT_PANEL_OPEN_BY_MODE: ContextPanelOpenByMode = {
@@ -25,9 +26,10 @@ export const DEFAULT_CONTEXT_PANEL_OPEN_BY_MODE: ContextPanelOpenByMode = {
   crm: true,
   forms: true,
   settings: true,
-  github: true,
   notes: false,
+  memory: false,
   providerAccounts: false,
+  scripts: false,
 };
 
 export const ASSISTANT_WRAPPER_WIDTH_MIN_VW = 15;
@@ -96,7 +98,6 @@ export function selectCanSwapWrappers(state: WrapperVisibility): boolean {
 }
 
 export type ModeRoutingState = {
-  githubMode?: boolean;
   taskMode: boolean;
   crmMode: boolean;
   activeCRMPage: string;
@@ -104,13 +105,14 @@ export type ModeRoutingState = {
 };
 
 export function selectActiveWorkspaceMode(state: ModeRoutingState): WorkspaceMode {
-  if (state.githubMode) return 'github';
   if (state.taskMode) return 'tasks';
   if (state.crmMode && state.activeCRMPage === 'forms') return 'forms';
   if (state.crmMode) return 'crm';
   if (state.activeView === 'settings') return 'settings';
   if (state.activeView === 'notes') return 'notes';
+  if (state.activeView === 'memory') return 'memory';
   if (state.activeView === 'providerAccounts') return 'providerAccounts';
+  if (state.activeView === 'scripts') return 'scripts';
   return 'documents';
 }
 
@@ -134,7 +136,7 @@ export function selectIsContextPanelAvailable(
   state: ModeRoutingState & { activeTaskPage: string },
 ): boolean {
   const mode = selectActiveWorkspaceMode(state);
-  if (mode === 'notes' || mode === 'providerAccounts') return false;
+  if (mode === 'notes' || mode === 'memory' || mode === 'providerAccounts' || mode === 'scripts') return false;
   if (mode === 'tasks') return state.activeTaskPage !== 'projects';
   if (mode === 'crm') return state.activeCRMPage !== 'pipeline' && state.activeCRMPage !== 'projects';
   return true;
@@ -165,12 +167,10 @@ export function mergeContextPanelOpenByMode(
       partial?.settings ??
       fallbacks.settings ??
       DEFAULT_CONTEXT_PANEL_OPEN_BY_MODE.settings,
-    github:
-      partial?.github ??
-      fallbacks.github ??
-      DEFAULT_CONTEXT_PANEL_OPEN_BY_MODE.github,
     notes: partial?.notes ?? fallbacks.notes ?? DEFAULT_CONTEXT_PANEL_OPEN_BY_MODE.notes,
+    memory: partial?.memory ?? fallbacks.memory ?? DEFAULT_CONTEXT_PANEL_OPEN_BY_MODE.memory,
     providerAccounts: partial?.providerAccounts ?? fallbacks.providerAccounts ?? DEFAULT_CONTEXT_PANEL_OPEN_BY_MODE.providerAccounts,
+    scripts: partial?.scripts ?? fallbacks.scripts ?? DEFAULT_CONTEXT_PANEL_OPEN_BY_MODE.scripts,
   };
 }
 
@@ -223,7 +223,7 @@ function parseContextPanelOpenByMode(raw: unknown): Partial<ContextPanelOpenByMo
   if (typeof obj !== 'object' || obj === null) return undefined;
   const rec = obj as Record<string, unknown>;
   const out: Partial<ContextPanelOpenByMode> = {};
-  for (const key of ['documents', 'tasks', 'crm', 'forms', 'settings', 'github', 'notes'] as const) {
+  for (const key of ['documents', 'tasks', 'crm', 'forms', 'settings', 'notes', 'memory', 'scripts'] as const) {
     if (key in rec) out[key] = Boolean(rec[key]);
   }
   return out;

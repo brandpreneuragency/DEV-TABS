@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RightPanelSubheader } from './RightPanelSubheader';
 
@@ -33,16 +33,15 @@ vi.mock('react-i18next', () => ({
 
 beforeEach(() => vi.clearAllMocks());
 
-describe('shared agent picker', () => {
-  it.each(['writer', 'task'] as const)('offers every agent in %s chats', (mode) => {
+describe('chat toolbar', () => {
+  it.each(['writer', 'task'] as const)('omits the TABS agent picker in %s chats', (mode) => {
     render(<RightPanelSubheader mode={mode} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Writing assistant' }));
-    expect(screen.getAllByRole('menuitemradio')).toHaveLength(2);
-    expect(screen.getByRole('menuitemradio', { name: 'Writing assistant' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('menuitem', { name: '+ Manage Agents' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Planning assistant' }));
-    expect(setActiveAgent).toHaveBeenCalledWith('former-task');
+    expect(screen.queryByRole('button', { name: 'Writing assistant' })).not.toBeInTheDocument();
+    expect(screen.queryByText('+ Manage Agents')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Context window' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chat history' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New chat' })).toBeInTheDocument();
+    expect(setActiveAgent).not.toHaveBeenCalled();
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 });
-

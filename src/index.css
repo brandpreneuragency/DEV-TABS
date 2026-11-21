@@ -174,6 +174,8 @@ button.ctrl-xs.editor-topbar-title {
 }
 .ctrl-xs.editor-topbar-title-input,
 input.ctrl-xs.editor-topbar-title-input {
+  height: var(--c-sq-button);
+  min-height: var(--c-sq-button);
   font-size: var(--fs-sm);
 }
 .editor-topbar-title-input {
@@ -266,7 +268,7 @@ input.ctrl-xs.editor-topbar-title-input {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: var(--c-space-1);
+  padding: 0 var(--c-space-0) 0;
   background-color: var(--c-background-4);
 }
 
@@ -276,6 +278,7 @@ input.ctrl-xs.editor-topbar-title-input {
   min-width: 0;
   min-height: 0;
   height: var(--control-height-sm);
+  margin-bottom: var(--c-gap-1);
   padding-left: 0;
   padding-right: 0;
   background-color: var(--c-background-4);
@@ -310,7 +313,9 @@ input.ctrl-xs.editor-topbar-title-input {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 90px;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
   height: 100%;
   background: transparent;
 }
@@ -319,14 +324,24 @@ input.ctrl-xs.editor-topbar-title-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--control-height-sm);
-  height: var(--control-height-sm);
-  max-width: var(--control-height-sm);
-  max-height: var(--control-height-sm);
   border: 0;
   background: transparent;
   color: var(--c-text-3);
   cursor: default;
+}
+
+:root .ui-icon-button.app-titlebar__window-control {
+  width: var(--window-control-width);
+  height: var(--c-sq-button);
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+  flex: 0 0 var(--window-control-width);
+}
+
+.app-titlebar__window-control--close {
+  color: var(--c-danger);
 }
 
 .app-titlebar__window-control:hover {
@@ -341,8 +356,8 @@ input.ctrl-xs.editor-topbar-title-input {
 
 .app-titlebar__window-control--close:hover,
 .app-titlebar__window-control--close:focus-visible {
-  background: #e81123;
-  color: #fff;
+  background: var(--c-danger);
+  color: var(--c-text-1);
 }
 
 #main-columns {
@@ -1607,6 +1622,7 @@ ul {
 
 #editor-topbar .tbar-btn {
   box-sizing: border-box;
+  color: var(--c-text-3);
 }
 
 #editor-topbar-context {
@@ -1628,7 +1644,9 @@ ul {
   color: var(--c-text-3);
 }
 
-#editor-topbar .tbar-btn:hover {
+#editor-topbar .tbar-btn:hover,
+#editor-topbar .context-panel-toggle:hover,
+#editor-topbar .assistant-toggle:hover {
   color: var(--c-text-1);
 }
 
@@ -1743,7 +1761,13 @@ ul {
   --inline-preset-h2-size: var(--fs-sm);
   --inline-preset-h3-size: var(--fs-sm);
 }
-.tiptap-editor a {
+.tiptap-editor img {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+.tiptap-editor a,
+.notes-rich-text a {
   color: var(--c-accent-1);
   text-decoration: underline;
 }
@@ -1984,7 +2008,7 @@ button.ctrl-xs.editor-topbar-title {
   border-style: none;
   border-image: none;
   background-color: transparent;
-  color: var(--c-text-3);
+  color: var(--c-text-2);
   font-size: var(--fs-sm);
 }
 button.ctrl-xs.editor-topbar-title:hover {
@@ -2093,7 +2117,7 @@ button.calendar-task-row {
 }
 :root #chat-input-card .btn-send {
   background-color: var(--c-accent-2);
-  color: var(--c-text-3);
+  color: var(--c-text-1);
 }
 :root #chat-input-card .btn-send:not(:disabled):hover {
   background: var(--c-accent-1);
@@ -2922,14 +2946,14 @@ button.calendar-task-row {
 
 /*SHARED - TOAST*/
 .confirm-box {
-  background: var(--c-background-1);
+  background: var(--c-background-3);
   border-radius: var(--radius-sm);
   padding: 24px;
   max-width: 400px;
   width: 90%;
 }
 .confirm-box.notes-dialog {
-  background: var(--c-background-2);
+  background: var(--c-background-3);
   border: solid var(--border-width) var(--c-border-1);
   padding: var(--c-space-2);
 }
@@ -3623,9 +3647,16 @@ button.calendar-task-row {
   background: var(--c-background-2);
   height: auto;
   min-height: 0;
+}
+
+:root :is(.tiptap-editor, .notes-rich-text) {
   --inline-preset-h1-size: calc(var(--fs-sm) + 6px);
   --inline-preset-h2-size: calc(var(--fs-sm) + 4px);
   --inline-preset-h3-size: calc(var(--fs-sm) + 2px);
+}
+
+:root #editor-column .tiptap-editor {
+  background: transparent;
 }
 
 /*FORMATTING TOOLBAR*/
@@ -3710,6 +3741,7 @@ button.calendar-task-row {
 
 .selection-toolbar-action-btn {
   width: 100%;
+  height: var(--c-sq-button);
   min-width: 0;
   padding: 0 var(--c-space-1);
   display: inline-flex;
@@ -3823,7 +3855,7 @@ button.calendar-task-row {
   border: var(--border-width) solid var(--c-border-1);
   border-radius: var(--radius-sm);
   background: var(--c-background-3);
-  color: var(--c-text-3);
+  color: var(--c-text-2);
   font-family: var(--c-font-1) !important;
   font-size: var(--fs-sm);
   font-weight: 500;
@@ -3862,11 +3894,11 @@ button.calendar-task-row {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--c-text-2);
 }
 
 .filetree-select-folder-btn > .filetree-select-folder-label {
   flex: 0 1 auto;
-  color: var(--c-text-3);
   font-weight: 100;
 }
 
@@ -3891,7 +3923,7 @@ button.calendar-task-row {
 :root #task-comment-card {
   background-color: var(--c-background-3);
   border-radius: var(--radius-sm);
-  border: none;
+  border: var(--border-width) solid var(--c-border-1);
   padding-left: 0px;
   padding-right: 0px;
   padding-bottom: 0;
@@ -3976,7 +4008,7 @@ button.calendar-task-row {
 :root #chat-input-card {
   background: var(--c-background-3);
   border-radius: var(--radius-sm);
-  border: none;
+  border: var(--border-width) solid var(--c-border-1);
   container-type: inline-size;
   padding: 0;
   overflow: visible;
@@ -4003,12 +4035,17 @@ button.calendar-task-row {
 }
 :root #chat-input-card .chat-input-bottom-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto;
+  grid-template-areas: 'tools models send';
   align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   height: fit-content;
   min-height: 0;
-  padding: 0 var(--c-space-3) var(--c-space-0) var(--c-space-0);
-  gap: 0;
+  padding: var(--c-gap-2) var(--c-space-1) var(--c-space-1);
+  gap: var(--c-gap-1) var(--c-space-0);
   overflow: visible;
   z-index: 2;
 }
@@ -4020,17 +4057,8 @@ button.calendar-task-row {
   min-width: 0;
   padding: 0 var(--c-space-0) var(--c-space-0);
 }
-:root #chat-input-card .chat-input-bottom-col--left {
-  display: flex;
-  align-items: center;
-  gap: var(--c-gap-1);
-  width: 100%;
-  min-width: 0;
-  overflow: visible;
-  padding: 0 var(--c-gap-1);
-  height: fit-content;
-}
 :root #chat-input-card .chat-input-bottom-col--tools {
+  grid-area: tools;
   display: flex;
   gap: var(--c-gap-1);
   padding: 0;
@@ -4038,6 +4066,7 @@ button.calendar-task-row {
   overflow: visible;
 }
 :root #chat-input-card .chat-input-bottom-col--send {
+  grid-area: send;
   width: 100%;
   justify-content: center;
   align-items: center;
@@ -4149,15 +4178,21 @@ button.calendar-task-row {
 :root #chat-input-card .chat-input-dropup-btn[data-active='true']:hover .chat-input-dropup-chevron {
   color: var(--c-text-3);
 }
-:root #chat-input-card .chat-input-dropup-btn:focus-visible {
-  color: var(--c-accent-3);
-  outline: 1px solid var(--c-border-2);
-  outline-offset: 1px;
+:root #chat-input-card .ui-icon-button:focus-visible {
+  outline: none;
 }
-:root #chat-input-card .chat-input-dropup-btn:focus-visible .chat-input-dropup-label,
-:root #chat-input-card .chat-input-dropup-btn:focus-visible .chat-input-dropup-chevron,
+:root #chat-input-card .chat-input-dropup-btn:focus-visible {
+  color: var(--c-text-3);
+}
 :root #chat-input-card .chat-input-dropup-btn:focus-visible .chat-input-dropup-icon {
-  color: var(--c-accent-3);
+  color: inherit;
+}
+/* Ordinary composer actions retain system focus in Windows High Contrast. */
+@media (forced-colors: active) {
+  :root #chat-input-card .ui-icon-button:focus-visible {
+    outline: var(--focus-width) solid CanvasText;
+    outline-offset: calc(-1 * var(--focus-width));
+  }
 }
 @container (max-width: 280px) {
 
@@ -4165,10 +4200,13 @@ button.calendar-task-row {
 :root #chat-input {
   border: none;
   min-height: 42px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   display: flex;
   flex-wrap: nowrap;
   vertical-align: middle;
-  padding: 14px 18px 0;
+  padding: var(--c-space-1) var(--c-space-1) 0;
   line-height: var(--line-normal);
   justify-content: center;
   align-items: center;
@@ -4199,11 +4237,12 @@ button.calendar-task-row {
   content: '';
   width: 8px;
   height: 2px;
-  border-top: 1px solid var(--c-border-2);
-  border-bottom: 1px solid var(--c-border-2);
-  opacity: 0.6;
+  border-top: 1px solid var(--c-border-0);
+  border-bottom: 1px solid var(--c-border-0);
+  opacity: 1;
 }
 :root #chat-input-card .composer-resize-handle:hover::before {
+  border-color: var(--c-border-2);
   color: var(--c-text-1);
   opacity: 1;
 }
@@ -4685,7 +4724,7 @@ button.calendar-task-row {
 
 .right-panel-subheader {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
   width: 100%;
   height: var(--control-height-sm);
@@ -4703,38 +4742,6 @@ button.calendar-task-row {
   gap: var(--c-gap-1);
 }
 
-.right-panel-agent-column {
-  justify-content: center;
-  min-width: 0;
-}
-
-.right-panel-agent-picker {
-  position: relative;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.right-panel-subheader .tbar-btn.right-panel-agent-button {
-  width: auto;
-  max-width: 100%;
-  gap: var(--c-space-0);
-  color: var(--c-text-3);
-}
-
-.right-panel-agent-button svg {
-  flex-shrink: 0;
-}
-
-.right-panel-agent-menu {
-  top: calc(100% + 4px);
-  bottom: auto;
-  left: 50%;
-  translate: -50% 0;
-  margin-top: 0;
-  width: 200px;
-  max-width: calc(100vw - 24px);
-}
-
 .right-panel-subheader .tbar-btn {
   box-sizing: border-box;
   background: transparent;
@@ -4746,8 +4753,7 @@ button.calendar-task-row {
 }
 
 .right-panel-subheader-actions .tbar-btn:hover,
-.right-panel-subheader .tbar-btn:hover,
-.right-panel-subheader .tbar-btn.right-panel-agent-button:hover {
+.right-panel-subheader .tbar-btn:hover {
   background: transparent !important;
   background-color: transparent !important;
   color: var(--c-text-1);
@@ -4760,6 +4766,15 @@ button.calendar-task-row {
   background: transparent !important;
   background-color: transparent !important;
   color: var(--c-accent-1);
+}
+
+.right-panel-subheader-actions .tbar-btn:focus,
+.right-panel-subheader-actions .tbar-btn:focus-visible {
+  color: var(--c-text-3);
+}
+
+.right-panel-subheader-actions .tbar-btn:hover {
+  color: var(--c-text-1);
 }
 
 .right-panel-subheader .tbar-btn--on {

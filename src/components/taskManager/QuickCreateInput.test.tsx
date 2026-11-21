@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QuickCreateInput } from './QuickCreateInput';
 
@@ -11,9 +11,17 @@ const projects = [
   { id: 'p-web', name: 'Website', color: 'c1b', clientId: 'c1' },
   { id: 'p-other', name: 'Other', color: 'c2', clientId: 'c2' },
 ];
+const clients = [
+  { id: 'c1', name: 'Brandpreneur' },
+  { id: 'c2', name: 'Acme' },
+];
 
 let selectedClientId: string | null = 'c1';
 let selectedProjectId: string | null = null;
+const setSelection = vi.fn((clientId: string | null, projectId: string | null) => {
+  selectedClientId = clientId;
+  selectedProjectId = projectId;
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -27,8 +35,16 @@ vi.mock('../../stores/taskStore', () => ({
     createTask: typeof createTask;
     selectedClientId: string | null;
     selectedProjectId: string | null;
+    setSelection: typeof setSelection;
   }) => unknown) => {
-    const state = { createTask, selectedClientId, selectedProjectId };
+    const state = { createTask, selectedClientId, selectedProjectId, setSelection };
+    return selector ? selector(state) : state;
+  },
+}));
+
+vi.mock('../../stores/clientStore', () => ({
+  useClientStore: (selector?: (s: { clients: typeof clients }) => unknown) => {
+    const state = { clients };
     return selector ? selector(state) : state;
   },
 }));
@@ -49,6 +65,7 @@ describe('QuickCreateInput', () => {
   beforeEach(() => {
     selectedClientId = 'c1';
     selectedProjectId = null;
+    setSelection.mockClear();
     createTask.mockReset();
     showToast.mockReset();
     createTask.mockResolvedValue({ id: 't-new' });
@@ -61,9 +78,48 @@ describe('QuickCreateInput', () => {
     await user.click(screen.getByRole('button', { name: 'No Project' }));
 
     expect(screen.queryByText('No project')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'General' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Website' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Other' })).not.toBeInTheDocument();
+    const menu = screen.getByRole('menu', { name: 'tasks.selectProject' });
+    expect(within(menu).getByRole('menuitem', { name: 'General' })).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitem', { name: 'Website' })).toBeInTheDocument();
+    expect(within(menu).queryByRole('menuitem', { name: 'Other' })).not.toBeInTheDocument();
+  });
+
+  it('changes client scope, clears an old project, and creates in the selected client', async () => {
+    const user = userEvent.setup();
+    const view = render(<QuickCreateInput assignedProject="Website" />);
+
+    await user.click(screen.getByRole('button', { name: 'tasks.selectClient' }));
+    const clientMenu = screen.getByRole('menu', { name: 'tasks.selectClient' });
+    await user.click(within(clientMenu).getByRole('menuitem', { name: 'Acme' }));
+
+    expect(setSelection).toHaveBeenCalledWith('c2', null);
+    expect(screen.getByRole('button', { name: 'No Project' })).toBeInTheDocument();
+
+    view.rerender(<QuickCreateInput assignedProject="Website" />);
+    await user.click(screen.getByRole('button', { name: 'No Project' }));
+    const projectMenu = screen.getByRole('menu', { name: 'tasks.selectProject' });
+    expect(within(projectMenu).getByRole('menuitem', { name: 'Other' })).toBeInTheDocument();
+    expect(within(projectMenu).queryByRole('menuitem', { name: 'Website' })).not.toBeInTheDocument();
+    await user.click(within(projectMenu).getByRole('menuitem', { name: 'Other' }));
+    await user.type(screen.getByRole('textbox'), 'Acme follow up');
+    await user.click(screen.getByTitle('Add task'));
+
+    expect(createTask).toHaveBeenCalledWith('Acme follow up', expect.objectContaining({ projectId: 'p-other' }));
+  });
+
+  it('navigates the client menu with arrow keys and restores focus on Escape', async () => {
+    const user = userEvent.setup();
+    render(<QuickCreateInput />);
+    const trigger = screen.getByRole('button', { name: 'tasks.selectClient' });
+
+    await user.click(trigger);
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'tasks.allClients' })).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('menu', { name: 'tasks.selectClient' })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 
   it('creates a task on the resolved General project when none is picked', async () => {
@@ -84,7 +140,8 @@ describe('QuickCreateInput', () => {
     render(<QuickCreateInput />);
 
     await user.click(screen.getByRole('button', { name: 'No Project' }));
-    await user.click(screen.getByRole('button', { name: 'Website' }));
+    const menu = screen.getByRole('menu', { name: 'tasks.selectProject' });
+    await user.click(within(menu).getByRole('menuitem', { name: 'Website' }));
     await user.type(screen.getByRole('textbox'), 'Ship site');
     await user.click(screen.getByTitle('Add task'));
 

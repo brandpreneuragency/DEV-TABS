@@ -8,8 +8,15 @@ export function remainingPercent(used: number | null): number | null {
   return 100 - used;
 }
 
-export function usageWindow(usage: AccountUsage | null, minutes: number): UsageWindow | null {
-  return usage?.windows.find((window) => window.windowMinutes === minutes) ?? null;
+export function usageWindow(usage: AccountUsage | null, minutes: number, id?: string): UsageWindow | null {
+  return usage?.windows.find((window) => window.windowMinutes === minutes
+    && (id ? window.id === id : window.id !== 'weeklyFable')) ?? null;
+}
+
+export function billingResetTime(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && timestamp >= 0 ? timestamp : null;
 }
 
 export function accountIsStale(account: ProviderAccount, now: number): boolean {

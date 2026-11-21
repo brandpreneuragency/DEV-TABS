@@ -7,7 +7,7 @@
 export const ASSISTANT_MIN_PX = 320;
 export const PRIMARY_MIN_PX = 140;
 /** Center editor / detail column floor when two primary panels are open. */
-export const CENTER_MIN_PX = 400;
+export const CENTER_MIN_PX = 200;
 export const HANDLE_WIDTH_PX = 6;
 
 /** Contextual panel visual bounds (PRD 14.3). */

@@ -1,0 +1,185 @@
+/* OpenCode permission/form panel.
+ * Placement and field chrome only. Role geometry/colors come from tokens.css
+ * and controls.css. Text fields are borderless per UI_RULES section 4/15.
+ */
+
+.open-code-request-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--c-space-1);
+  min-width: 0;
+  /* The host owns the panel inset; the card owns its own content inset. */
+}
+
+.open-code-request-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--c-gap-1);
+  min-width: 0;
+  padding: var(--c-space-1);
+  border: var(--border-width) solid var(--c-border-1);
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+
+.open-code-request-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--c-gap-1);
+  min-width: 0;
+  color: var(--c-text-1);
+  font-size: var(--fs-sm);
+}
+
+.open-code-request-status,
+.open-code-request-meta {
+  color: var(--c-text-3);
+  font-size: var(--fs-xs);
+}
+
+.open-code-request-action {
+  margin: 0;
+  color: var(--c-text-1);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.open-code-request-resources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--c-gap-0);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--c-text-2);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.open-code-request-note {
+  margin: 0;
+  color: var(--c-text-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.open-code-request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--c-gap-1);
+}
+
+.open-code-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--c-space-1);
+  min-width: 0;
+}
+
+.open-code-field {
+  min-width: 0;
+}
+
+.open-code-field-label {
+  color: var(--c-text-3);
+  font-size: var(--fs-sm);
+}
+
+.open-code-field-description {
+  margin: 0;
+  color: var(--c-text-3);
+  font-size: var(--fs-xs);
+}
+
+.open-code-field-control {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: var(--control-height-sm);
+  padding: 0 var(--c-space-1);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--c-background-3);
+  color: var(--c-text-1);
+  font-family: var(--c-font-1);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* Normal-mode field focus is quiet. controls.css restores the system
+ * forced-colors outline for inputs/selects; buttons keep the shared
+ * ui-button focus role. */
+.open-code-field-control:focus,
+.open-code-field-control:focus-visible {
+  outline: none;
+}
+
+.open-code-field-control::placeholder {
+  color: var(--c-text-3);
+}
+
+.open-code-field-control:disabled {
+  opacity: var(--disabled-opacity);
+  cursor: not-allowed;
+}
+
+.open-code-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--c-gap-1);
+  min-width: 0;
+  color: var(--c-text-1);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.open-code-check input[type='checkbox'] {
+  flex: 0 0 auto;
+  margin: var(--c-gap-0) 0 0;
+}
+
+.open-code-custom-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--c-gap-1);
+  min-width: 0;
+}
+
+.open-code-multiselect {
+  display: flex;
+  flex-direction: column;
+  gap: var(--c-gap-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.open-code-multiselect legend {
+  margin-bottom: var(--c-gap-1);
+  padding: 0;
+}
+
+.open-code-external {
+  display: flex;
+  flex-direction: column;
+  gap: var(--c-gap-1);
+  min-width: 0;
+  padding: var(--c-space-1);
+  border-radius: var(--radius-sm);
+  background: var(--c-background-3);
+}
+
+.open-code-external .ui-button {
+  align-self: flex-start;
+}
+
+.open-code-request-error,
+.open-code-field-error {
+  color: var(--c-danger);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}

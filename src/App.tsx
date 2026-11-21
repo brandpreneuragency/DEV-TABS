@@ -8,6 +8,7 @@ import { EditorWorkspace } from './components/editor/EditorWorkspace';
 import { TaskDetailPanel } from './components/taskManager/TaskDetailPanel';
 import { TaskProjectsKanban } from './components/taskManager/TaskProjectsKanban';
 import { AISidebar } from './components/sidebar/AISidebar';
+import { MemoryAssistantSidebar } from './components/memoryNotes/MemoryAssistant';
 import { FileExplorerPanel } from './components/fileExplorer/FileExplorerPanel';
 import { TaskListPanel } from './components/taskManager/TaskListPanel';
 import { AgentEditor } from './components/modals/AgentEditor';
@@ -30,14 +31,19 @@ import { resolveTaskAssistantBinding } from './stores/taskAssistantBinding';
 import { retireLegacyThemeTokens } from './stores/themeStore';
 import { runStartupUpdateCheck } from './services/updater';
 import { subscribeToDesktopFileOpen } from './services/desktopFileOpen';
-import { codexSessionService } from './services/codex/sessionService';
+import { startToolBridge } from './services/openCode/toolBridge';
 import { startTaskAuthority } from './services/taskAuthority/service';
 import { installDragMotion } from './services/dragMotion';
 import './styles/dragMotion.css';
 
 export default function App() {
   useEffect(() => installDragMotion(document), []);
-  useEffect(() => { void codexSessionService.start(); }, []);
+  useEffect(() => {
+    // App-lifetime singleton; StrictMode remounts must not stop a shared startup.
+    void startToolBridge().catch(() => {
+      // Chat reports connection failures and retries when a turn is submitted.
+    });
+  }, []);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [trashOpen, setTrashOpen] = useState(false);
   const [uiSettingsLoaded, setUISettingsLoaded] = useState(false);
@@ -45,7 +51,6 @@ export default function App() {
   const {
     loadUISettings,
     taskMode,
-    githubMode,
     activeTaskId,
     activeTaskPage,
     setTaskMode,
@@ -177,20 +182,20 @@ export default function App() {
   const effectiveTaskId = activeTaskId ?? storeActiveTaskId;
 
   // The Settings doc only lives in doc mode (not task/crm).
-  const settingsActive = !githubMode && !taskMode && !crmMode && activeView === 'settings';
-  const notesActive = !githubMode && !taskMode && !crmMode && activeView === 'notes';
-  const accountsActive = !githubMode && !taskMode && !crmMode && activeView === 'providerAccounts';
+  const settingsActive = !taskMode && !crmMode && activeView === 'settings';
+  const notesActive = !taskMode && !crmMode && activeView === 'notes';
+  const memoryActive = !taskMode && !crmMode && activeView === 'memory';
+  const accountsActive = !taskMode && !crmMode && activeView === 'providerAccounts';
+  const scriptsActive = !taskMode && !crmMode && activeView === 'scripts';
 
   // Panel 2 (editor) — CRM > task > doc. Settings primary content is
   // owned by AppLayout (SettingsDocument → section slots).
-  const activeWorkspace = githubMode || notesActive || accountsActive
+  const activeWorkspace = notesActive || memoryActive || accountsActive || scriptsActive
     ? null
     : crmMode
     ? <CRMWorkspace />
     : taskMode
-    ? activeTaskPage === 'projects'
-      ? <TaskProjectsKanban />
-      : <TaskDetailPanel />
+    ? <TaskDetailPanel />
     : settingsActive
     ? null
     : <EditorWorkspace onEditorReady={handleEditorReady} />;
@@ -199,7 +204,7 @@ export default function App() {
   // Settings supplies its own list via SettingsPanels inside SettingsDocument.
   const formsPageActive = crmMode && activeCRMPage === 'forms';
   const clientsPageActive = crmMode && activeCRMPage === 'clients';
-  const leftPanel = githubMode || notesActive || accountsActive
+  const leftPanel = notesActive || memoryActive || accountsActive || scriptsActive
     ? null
     : crmMode
     ? formsPageActive
@@ -213,7 +218,7 @@ export default function App() {
 
   // Assistant content — Settings AI (scoped by sub-tab), Task Manager AI
   // (Tasks + Clients/Projects/CRM), or document writer AI.
-  const taskBinding = githubMode ? null : resolveTaskAssistantBinding({
+  const taskBinding = resolveTaskAssistantBinding({
     taskMode,
     crmMode,
     activeCRMPage,
@@ -222,7 +227,10 @@ export default function App() {
     selectedProjectId,
   });
 
-  const sidebar = githubMode || notesActive || accountsActive ? (
+  // Independent readers never inherit the selected document/editor or task context.
+  const sidebar = memoryActive ? (
+    <MemoryAssistantSidebar />
+  ) : notesActive || accountsActive || scriptsActive ? (
     <AISidebar workspaceId={null} taskId={null} mode="writer" editor={null} />
   ) : settingsActive ? (
     <AISidebar
@@ -270,7 +278,7 @@ export default function App() {
             editor={activeWorkspace}
             sidebar={sidebar}
             leftPanel={leftPanel}
-            taskListPanel={<TaskListPanel />}
+            taskListPanel={activeTaskPage === 'projects' ? <TaskProjectsKanban /> : <TaskListPanel />}
             modals={
               <>
                 <AgentEditor />

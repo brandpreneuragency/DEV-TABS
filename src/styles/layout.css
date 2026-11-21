@@ -23,6 +23,7 @@ body {
   width: 100%;
   height: 100dvh;
   min-height: var(--app-min-height);
+  border: var(--border-width-strong) solid var(--c-accent-2);
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
@@ -210,9 +211,9 @@ html[data-resizing] * {
 }
 
 .main-resize-handle__line {
-  width: 2px;
+  width: var(--c-gap-0);
   height: 100%;
-  background-color: #000;
+  background-color: var(--c-border-0);
 }
 
 .main-resize-handle:focus-visible {
@@ -269,6 +270,22 @@ html[data-resizing] * {
   width: auto;
 }
 
+/* Documents: retain panel hosts and widths while placing the tree on the right. */
+.primary-workspace-content[data-two-panel='true'][data-context-side='right'] {
+  grid-template-columns:
+    minmax(var(--center-min-width, 400px), 1fr)
+    var(--shell-handle-width, 6px)
+    minmax(var(--context-min-width, 260px), min(var(--context-panel-width), calc(100% - var(--shell-handle-width, 6px) - var(--center-min-width, 400px))));
+}
+
+.primary-workspace-content[data-two-panel='true'][data-context-side='right'] > .center-content-panel {
+  order: -1;
+}
+
+.primary-workspace-content[data-two-panel='true'][data-context-side='right'] > .contextual-panel {
+  order: 1;
+}
+
 .context-resize-handle {
   min-width: var(--shell-handle-width, 6px);
   width: var(--shell-handle-width, 6px);
@@ -287,9 +304,16 @@ html[data-resizing] * {
 }
 
 .context-resize-handle__line {
-  width: 1px;
+  width: var(--c-gap-0);
   height: 100%;
-  background-color: #000;
+  background-color: var(--c-border-0);
+}
+
+.navigation-resize-handle:hover::before,
+.main-resize-handle:hover > .main-resize-handle__line,
+.context-resize-handle:hover > .context-resize-handle__line {
+  background: var(--c-accent-2);
+  box-shadow: 0 0 var(--c-gap-2) var(--c-accent-2);
 }
 
 .context-resize-handle:hover,
@@ -307,6 +331,7 @@ html[data-resizing] * {
   min-height: 0;
   flex: 1;
   overflow: hidden;
+  border-radius: var(--radius-sm);
   /* Centre-only container queries (editor / task detail). */
   container-type: inline-size;
   container-name: main-panel;
@@ -314,7 +339,7 @@ html[data-resizing] * {
 
 /* Stable leading slot for inner contextual-panel toggle (Phase 4). */
 .center-content-panel > .subtasks-bar-wrapper {
-  padding: var(--c-space-1);
+  padding: 0 var(--c-gap-2) var(--c-gap-2);
   display: flex;
   align-items: center;
   gap: var(--c-space-1);
@@ -432,6 +457,10 @@ html[data-resizing] * {
   container-name: detail-panel;
 }
 
+#ai-sidebar-panel {
+  padding-inline: var(--c-space-0);
+}
+
 .panel {
   min-width: 0;
   min-height: 0;
@@ -515,7 +544,8 @@ html[data-resizing] * {
   min-width: 0;
   overflow: hidden;
   border-radius: var(--radius-sm);
-  padding: 0;
+  padding: 0 0 var(--c-space-1) var(--c-space-0);
+  background-color: var(--c-background-3);
 }
 
 /* Task list inner content: the actual scrollable list.
@@ -537,11 +567,12 @@ html[data-resizing] * {
   flex: 0 0 auto;
   width: 100%;
   min-height: 0;
-  padding: var(--c-space-1);
+  padding: 0;
+  padding-right: var(--c-space-0);
   border: none;
   border-radius: var(--radius-sm);
   background-color: transparent;
-  margin-top: auto;
+  margin-top: var(--c-space-0);
 }
 
 /* ---- Task detail panel (#task-detail-panel + .panel) ----
@@ -624,7 +655,7 @@ html[data-resizing] * {
 .ai-sidebar-composer.panel-footer {
   flex: 0 0 auto;
   min-height: 0;
-  padding: var(--c-space-1);
+  padding: var(--c-space-0) var(--c-space-0) var(--c-space-1);
   /* Agent 8: container context for the chat input
    * composer in the right detail panel. */
   container-type: inline-size;
@@ -653,7 +684,7 @@ html[data-resizing] * {
  * not set min-width, so the inline style still wins. */
 .panel#center-panel {
   width: 100%;
-  background-color: var(--c-background-2);
+  background-color: var(--c-background-3);
   border-radius: 0px;
 }
 
@@ -676,7 +707,7 @@ html[data-resizing] * {
   min-width: auto;
   margin-left: 0;
   margin-right: 0;
-  padding: 0;
+  padding: 0 var(--c-gap-2) var(--c-space-0);
   gap: 0;
 }
 
@@ -685,7 +716,7 @@ html[data-resizing] * {
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  margin-top: var(--c-space-1);
+  margin-top: var(--c-space-0);
   padding: var(--c-space-0) var(--editor-inset);
 }
 
@@ -732,7 +763,7 @@ html[data-resizing] * {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  padding: var(--c-space-1);
+  padding: 0 var(--c-gap-2) var(--c-space-0);
   gap: 0;
   position: relative;
 }
@@ -828,8 +859,6 @@ html[data-resizing] * {
  *  - <= 720px: hide the optional labels in the editor
  *    topbar (e.g. `editor-breadcrumbs` text-only labels).
  *  - <= 520px: (reserved)
- *  - <= 420px: hide the timestamp in each comment row when the
- *    detail panel is at its narrowest.
  *  - <= 360px: tighten the task detail's comment input
  *    gap.
  */
@@ -838,14 +867,6 @@ html[data-resizing] * {
    * collapse to a shorter form. Optional text-only
    * labels (e.g. file path text) become icon-only. */
   .editor-breadcrumbs .breadcrumb-text {
-    display: none;
-}
-}
-
-@container main-panel (max-width: 420px) {
-  /* Hide the timestamp in each comment row when the
-   * detail panel is at its narrowest. */
-  #task-detail-panel .comment-thread > .comment-meta {
     display: none;
 }
 }

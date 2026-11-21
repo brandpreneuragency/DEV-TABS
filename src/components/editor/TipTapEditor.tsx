@@ -19,6 +19,7 @@ import { Fragment, Slice } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
 import { ClearFormattingOnEnter } from './ClearFormattingOnEnter';
 import { InlineTextPreset } from './InlineTextPreset';
+import { SourceFileFormat } from './SourceFileFormat';
 import { useAutoSave } from '../../hooks/useAutoSave';
 import { useUIStore } from '../../stores/uiStore';
 import { getEditorStateCache } from '../../stores/workspaceStore';
@@ -138,6 +139,7 @@ export function TipTapEditor({
         undoRedo: false,
       }),
       CustomHistory,
+      SourceFileFormat,
       Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
       TextStyle,
